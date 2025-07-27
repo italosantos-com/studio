@@ -1,50 +1,28 @@
 
 "use client";
 
-import { useEffect } from "react";
-import { useDyteClient, DyteProvider } from "@dytesdk/react-web-core";
-import { DyteMeeting } from "@dytesdk/react-ui-kit";
-
 interface DyteMeetingProps {
     show: boolean;
     onClose: () => void;
 }
 
-// Usaremos um authToken e roomName de placeholder.
-// Em um aplicativo real, eles seriam gerados dinamicamente no backend
-// e passados para este componente.
-const authToken = "YOUR_AUTH_TOKEN"; // Substitua por um token real para teste
-const roomName = "YOUR_ROOM_NAME"; // Substitua por um nome de sala real para teste
-
 export default function DyteMeetingComponent({ show, onClose }: DyteMeetingProps) {
-  const [meeting, initMeeting] = useDyteClient();
-
-  useEffect(() => {
-    if(show) {
-        initMeeting({
-            authToken,
-            roomName,
-            defaults: {
-                audio: false,
-                video: false,
-            },
-        });
-    }
-  }, [show, initMeeting]);
-
-  useEffect(() => {
-    if (meeting) {
-      meeting.on('meetingRoomLeft', () => {
-        onClose();
-      });
-    }
-  }, [meeting, onClose]);
-
-  if (!meeting) return null;
+  if (!show) return null;
 
   return (
-    <DyteProvider client={meeting}>
-        <DyteMeeting meeting={meeting} />
-    </DyteProvider>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+        <h2 className="text-xl font-bold mb-4">Videochamada</h2>
+        <p className="text-gray-600 mb-4">
+          Funcionalidade de videochamada temporariamente indisponível.
+        </p>
+        <button
+          onClick={onClose}
+          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+        >
+          Fechar
+        </button>
+      </div>
+    </div>
   );
 }
