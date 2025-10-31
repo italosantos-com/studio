@@ -4,34 +4,40 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetDescription } from "@/components/ui/sheet";
-import { ShoppingCart, Trash2, Loader2, Instagram, Facebook, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Loader2, Instagram, Facebook, AlertCircle, Lock, Eye, Play } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, doc, getDoc, updateDoc, arrayUnion, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { fetchInstagramShopFeed, type InstagramMedia } from '@/ai/flows/instagram-shop-flow';
 import { fetchFacebookProducts, type FacebookProduct } from '@/ai/flows/facebook-products-flow';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertTitle, AlertDescription as AlertDesc } from '@/components/ui/alert';
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import { useAuth } from '@/contexts/AuthProvider';
+import { useRouter } from 'next/navigation';
+import { SmartVideoThumbnail } from '@/components/smart-video-player';
+import { Badge } from '@/components/ui/badge';
 
-interface Video {
+interface Product {
   id: string;
-  title: string;
+  name: string;
   description: string;
   price: number;
-  thumbnailUrl: string;
-  videoUrl: string;
-  aiHint?: string;
+  imageUrl: string;
+  videoUrl?: string;
+  type?: 'photo' | 'video';
+  status: 'active' | 'inactive';
+  sales?: number;
+  createdAt?: any;
+  sellerId?: string; // ID do usuário que está vendendo o produto
+  storageType?: string;
 }
 
-interface CartItem extends Video {
-  quantity: number;
-}
+const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
 
+// --- COMPONENTES DE FEED (Instagram e Facebook) --- 
+// ... (Estes componentes permanecem os mesmos)
 const InstagramShopFeed = () => {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
@@ -47,7 +53,7 @@ const InstagramShopFeed = () => {
                 if (response.error) {
                     setError(`Não foi possível carregar as fotos do Instagram. Motivo: ${response.error}`);
                 } else {
-                    const photosOnly = response.media.filter(m => m.media_type === 'IMAGE' && m.media_url);
+                    const photosOnly = response.media.filter((m: InstagramMedia) => m.media_type === 'IMAGE' && m.media_url);
                     setMedia(photosOnly);
                 }
             } catch (e: any) {
@@ -164,10 +170,10 @@ const FacebookProductsStore = () => {
                      <CardContent className="p-4 flex-1 flex flex-col">
                         <CardTitle className="text-lg text-foreground">{product.name}</CardTitle>
                         <CardDescription className="text-sm text-muted-foreground mt-1 flex-grow">{product.description}</CardDescription>
-                         <p className="text-primary font-semibold text-xl mt-2">{product.price}</p>
+                         <p className="text-white font-semibold text-xl mt-2">{product.price}</p>
                      </CardContent>
                      <CardFooter className="p-4 mt-auto">
-                        <Button asChild className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white shadow-lg transition-all duration-300">
+                        <Button asChild className="w-full h-11 bg-white hover:bg-gray-200 text-black shadow-lg transition-all duration-300">
                            <a href={product.url} target="_blank" rel="noopener noreferrer">
                                 <Facebook className="mr-2 h-5 w-5" />
                                 Ver no Facebook
@@ -180,197 +186,200 @@ const FacebookProductsStore = () => {
     );
 };
 
-
-export default function LojaPage() {
-  const [videos, setVideos] = useState<Video[]>([]);
+function LojaPageContent() {
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const router = useRouter();
+  const [purchasedProducts, setPurchasedProducts] = useState<Set<string>>(new Set());
+  const [playingProductId, setPlayingProductId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const router = useRouter();
 
+  // Buscar produtos da loja
   useEffect(() => {
-    const fetchVideos = async () => {
+    const fetchProducts = async () => {
       setIsLoading(true);
       try {
-        const videosCollection = collection(db, "videos");
-        const q = query(videosCollection, orderBy("createdAt", "desc"));
-        const querySnapshot = await getDocs(q);
-        const videosList = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as Video));
-        setVideos(videosList);
+        const response = await fetch('/api/admin/products');
+        const data = await response.json();
+        if (data.success) {
+          const activeProducts = (data.products || []).filter((p: Product) => p.status === 'active' && p.videoUrl);
+          setProducts(activeProducts);
+        } else {
+          toast({ variant: "destructive", title: "Erro ao carregar a loja", description: data.message });
+        }
       } catch (error) {
-        console.error("Error fetching videos: ", error);
-        toast({
-          variant: "destructive",
-          title: "Erro ao carregar a loja",
-          description: "Não foi possível buscar os vídeos.",
-        });
+        toast({ variant: "destructive", title: "Erro de rede", description: "Não foi possível buscar os produtos." });
       } finally {
         setIsLoading(false);
       }
     };
-
-    fetchVideos();
+    fetchProducts();
   }, [toast]);
 
-  const addToCart = (video: Video) => {
-    setCart(prevCart => {
-      const existingItem = prevCart.find(item => item.id === video.id);
-      if (existingItem) {
-        toast({
-            title: "Item já está no carrinho",
-            description: "A compra de vídeos é limitada a uma unidade por item.",
-        });
-        return prevCart;
+  // Buscar compras do usuário
+  useEffect(() => {
+    const fetchUserPurchases = async () => {
+      if (!user?.uid) {
+        setPurchasedProducts(new Set());
+        return;
       }
-      return [...prevCart, { ...video, quantity: 1 }];
-    });
-    toast({
-        title: `${video.title} adicionado!`,
-        description: "O item está no seu carrinho.",
-    });
+      try {
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          setPurchasedProducts(new Set(userDoc.data().purchasedProducts || []));
+        }
+      } catch (error) {
+        console.error("Erro ao buscar compras do usuário: ", error);
+      }
+    };
+    fetchUserPurchases();
+  }, [user?.uid]);
+
+  const handleProductClick = (product: Product) => {
+    if (!user) {
+      toast({ title: "Login necessário", description: "Você precisa estar logado para visualizar produtos.", variant: "destructive" });
+      router.push('/auth/face');
+      return;
+    }
+    if (purchasedProducts.has(product.id)) {
+      setPlayingProductId(playingProductId === product.id ? null : product.id);
+    } else {
+      toast({ title: "Produto Bloqueado", description: "Compre o produto para ter acesso.", variant: "destructive" });
+    }
   };
 
-  const removeFromCart = (videoId: string) => {
-    setCart(prevCart => prevCart.filter(item => item.id !== videoId));
+  // Ação chamada no frontend após a API de captura confirmar o pagamento
+  const handlePurchaseSuccess = (productId: string, payer: any) => {
+      const newPurchased = new Set(purchasedProducts);
+      newPurchased.add(productId);
+      setPurchasedProducts(newPurchased);
+
+      const product = products.find(p => p.id === productId);
+      if (product) {
+        const updatedProducts = products.map(p => 
+          p.id === productId ? { ...p, sales: (p.sales || 0) + 1 } : p
+        );
+        setProducts(updatedProducts);
+        setPlayingProductId(productId); // Auto-play
+      }
+
+      toast({ 
+        title: "Compra Aprovada!", 
+        description: `Obrigado, ${payer?.name?.given_name || 'Cliente'}! O vídeo é seu.`
+      });
   };
 
-  const totalItems = cart.length;
-  const totalPrice = cart.reduce((sum, item) => sum + item.price, 0);
-
-  const handlePaymentSuccess = () => {
-    toast({
-      title: "Pagamento bem-sucedido!",
-      description: `Seu pagamento foi concluído. Redirecionando...`,
-    });
-    
-    localStorage.setItem('hasPaid', 'true');
-    localStorage.setItem('customerEmail', customerEmail);
-    
-    setCart([]);
-    setCustomerEmail('');
-    setCustomerName('');
-    router.push('/dashboard');
-  };
 
   return (
-    <main className="flex flex-1 w-full flex-col items-center p-4 bg-background">
       <Card className="w-full max-w-6xl animate-in fade-in-0 zoom-in-95 duration-500 shadow-neon-red-strong border-primary/50 bg-card/90 backdrop-blur-xl">
         <CardHeader className="flex-row items-center justify-between border-b border-primary/20 pb-4">
-          <CardTitle className="text-3xl text-primary text-shadow-neon-red-light text-center flex-1">
-            Marketplace de Vídeos
-          </CardTitle>
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" className="relative h-12 px-6 border-primary/30 hover:border-primary hover:shadow-neon-red-light transition-all duration-300">
-                <ShoppingCart className="mr-2" />
-                <div className="flex flex-col items-start">
-                  <span className="text-sm font-semibold">{totalItems} Itens</span>
-                   <span className="text-xs text-muted-foreground">
-                    {totalPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </span>
-                </div>
-                {totalItems > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">
-                    {totalItems}
-                  </span>
-                )}
-              </Button>
-            </SheetTrigger>
-            <SheetContent className="bg-card border-primary/50 text-card-foreground">
-              <SheetHeader>
-                <SheetTitle className="text-2xl text-primary text-shadow-neon-red-light">Checkout</SheetTitle>
-              </SheetHeader>
-              <div className="flex flex-col h-full">
-                {cart.length === 0 ? (
-                  <div className="flex-1 flex items-center justify-center">
-                    <p className="text-muted-foreground">Seu carrinho está vazio.</p>
-                  </div>
-                ) : (
-                  <div className="flex-1 overflow-y-auto pr-4 -mr-4 mt-4">
-                    <SheetDescription>Confira seus itens e dados antes de finalizar a compra.</SheetDescription>
-                    <div className="space-y-4 mt-4">
-                      {cart.map(item => (
-                        <div key={item.id} className="flex items-start gap-4">
-                           <div className="w-20 h-20 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                                <Image src={item.thumbnailUrl} alt={item.title} width={80} height={80} className="object-cover w-full h-full" data-ai-hint={item.aiHint || 'video thumbnail'}/>
-                           </div>
-                          <div className="flex-1">
-                            <h4 className="font-semibold">{item.title}</h4>
-                            <p className="text-sm text-primary">{item.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                          </div>
-                          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => removeFromCart(item.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <SheetFooter className="mt-auto pt-6 border-t border-primary/20">
-                    <div className="w-full space-y-4">
-                        <div className="flex justify-between font-bold text-lg mb-4">
-                            <span>Total:</span>
-                            <span>{totalPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="name">Nome Completo</Label>
-                            <Input id="name" placeholder="Seu nome" value={customerName} onChange={(e) => setCustomerName(e.target.value)} disabled={cart.length === 0}/>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input id="email" type="email" placeholder="seu.email@exemplo.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} disabled={cart.length === 0}/>
-                        </div>
-                        <div className="pt-4">
-                            <Button 
-                                className="w-full"
-                                onClick={handlePaymentSuccess} 
-                                disabled={cart.length === 0 || !customerEmail || !customerName}
-                            >
-                                Finalizar com Pagamento (Simulado)
-                            </Button>
-                        </div>
-                    </div>
-                </SheetFooter>
-              </div>
-            </SheetContent>
-          </Sheet>
+          <CardTitle className="text-3xl text-white text-center flex-1">Adult Store</CardTitle>
         </CardHeader>
         <CardContent className="p-6 space-y-12">
             <div>
-              <CardTitle className="text-2xl text-primary text-shadow-neon-red-light flex items-center gap-3 mb-4">
-                <ShoppingCart /> Vídeos da Loja
+              <CardTitle className="text-2xl text-white flex items-center gap-3 mb-4">
+                <ShoppingCart /> Produtos da Loja
               </CardTitle>
               {isLoading ? (
-                <div className="flex flex-col items-center justify-center min-h-[400px]">
+                <div className="flex justify-center items-center min-h-[400px]">
                   <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                  <p className="mt-4 text-muted-foreground">Carregando vídeos...</p>
                 </div>
-              ) : videos.length > 0 ? (
+              ) : products.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {videos.map(video => (
-                    <Card key={video.id} className="overflow-hidden bg-card/50 border-primary/20 hover:border-primary hover:shadow-neon-red-light transition-all duration-300 flex flex-col group">
+                  {products.map(product => (
+                    <Card key={product.id} className="overflow-hidden bg-card/50 border-primary/20 hover:border-primary hover:shadow-neon-red-light transition-all duration-300 flex flex-col group">
                       <CardHeader className="p-0">
-                         <div className="aspect-video bg-muted overflow-hidden">
-                            <Image src={video.thumbnailUrl} alt={video.title} width={600} height={400} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-ai-hint="video thumbnail"/>
-                         </div>
+                        <div className="relative aspect-video group">
+                           {playingProductId === product.id && purchasedProducts.has(product.id) ? (
+                            <div className="aspect-video bg-black rounded-t-lg overflow-hidden">
+                              <video src={product.videoUrl} controls autoPlay muted playsInline className="w-full h-full object-contain" onEnded={() => setPlayingProductId(null)} />
+                            </div>
+                          ) : (
+                            <>
+                              {product.videoUrl ? (
+                                <SmartVideoThumbnail url={product.videoUrl} title={product.name} className="aspect-video" onClick={() => handleProductClick(product)} />
+                              ) : (
+                                <div className="aspect-video bg-muted flex items-center justify-center cursor-pointer" onClick={() => handleProductClick(product)}><Play className="w-12 h-12 text-muted-foreground" /></div>
+                              )}
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <Button variant="secondary" size="sm" className="p-2" onClick={() => handleProductClick(product)}>
+                                  {purchasedProducts.has(product.id) ? <Play className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                                </Button>
+                              </div>
+                              <div className="absolute top-2 left-2">
+                                <Badge variant={purchasedProducts.has(product.id) ? 'default' : 'secondary'}>
+                                  {purchasedProducts.has(product.id) ? '✓ Comprado' : 'Bloqueado'}
+                                </Badge>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </CardHeader>
-                      <CardContent className="p-4 flex-1 flex flex-col">
-                        <CardTitle className="text-lg text-foreground">{video.title}</CardTitle>
-                        <CardDescription className="text-sm text-muted-foreground mt-1 flex-grow">{video.description}</CardDescription>
+                      <CardContent className="p-4 flex-1">
+                        <CardTitle className="text-lg">{product.name}</CardTitle>
+                        <CardDescription className="text-sm mt-1">{product.description}</CardDescription>
                          <p className="text-primary font-semibold text-xl mt-2">
-                          {video.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          {(product.price || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
                       </CardContent>
                       <CardFooter className="p-4 mt-auto">
-                        <Button className="w-full h-11 bg-primary/90 hover:bg-primary text-primary-foreground shadow-neon-red-light hover:shadow-neon-red-strong" onClick={() => addToCart(video)}>
-                          <ShoppingCart className="mr-2 h-5 w-5" />
-                          Adicionar ao Carrinho
-                        </Button>
+                         <div className="w-full">
+                           {purchasedProducts.has(product.id) ? (
+                             <div className="text-center p-3 bg-green-500/10 rounded-lg"><p className="text-green-600 font-medium">✓ Produto Comprado</p></div>
+                           ) : !user ? (
+                             <Button onClick={() => router.push('/auth/face')} className="w-full">🔐 Fazer Login para Comprar</Button>
+                           ) : (product.sellerId && PAYPAL_CLIENT_ID) ? (
+                             <PayPalButtons
+                                  style={{ layout: 'horizontal', color: 'gold', shape: 'rect', label: 'buynow' }}
+                                  createOrder={async (data, actions) => {
+                                    try {
+                                      const res = await fetch('/api/paypal/create-order', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ productId: product.id, sellerId: product.sellerId }),
+                                      });
+                                      const order = await res.json();
+                                      if (order.orderId) {
+                                        return order.orderId;
+                                      } else {
+                                        throw new Error(order.error || 'Falha ao criar pedido no servidor.');
+                                      }
+                                    } catch (err: any) {
+                                       toast({ variant: "destructive", title: "Erro ao Iniciar Compra", description: err.message });
+                                       return Promise.reject(err);
+                                    }
+                                  }}
+                                  onApprove={async (data, actions) => {
+                                    try {
+                                       const res = await fetch('/api/paypal/capture-order', {
+                                         method: 'POST',
+                                         headers: { 'Content-Type': 'application/json' },
+                                         body: JSON.stringify({ 
+                                             orderId: data.orderID, 
+                                             productId: product.id,
+                                             sellerId: product.sellerId 
+                                        }),
+                                       });
+                                       const result = await res.json();
+                                       if(result.success) {
+                                           handlePurchaseSuccess(product.id, result.details);
+                                       } else {
+                                           throw new Error(result.message || 'Falha ao processar a compra no servidor.');
+                                       }
+                                    } catch (err: any) {
+                                       toast({ variant: "destructive", title: "Erro ao Finalizar Compra", description: err.message });
+                                    }
+                                  }}
+                                  onError={(err) => {
+                                      toast({ variant: "destructive", title: "Erro no PayPal", description: "Ocorreu um problema com o pagamento." });
+                                  }}
+                             />
+                           ) : (
+                             <div className="text-center p-3 bg-destructive/10 rounded-lg"><p className="text-destructive font-medium">Vendedor não configurado</p></div>
+                           )}
+                        </div>
                       </CardFooter>
                     </Card>
                   ))}
@@ -378,31 +387,39 @@ export default function LojaPage() {
               ) : (
                  <div className="flex flex-col items-center justify-center min-h-[400px]">
                   <ShoppingCart className="h-16 w-16 text-muted-foreground" />
-                  <p className="mt-4 text-xl font-semibold text-muted-foreground">Nenhum vídeo disponível no momento.</p>
-                  <p className="text-sm text-muted-foreground">Volte em breve para novidades!</p>
+                  <p className="mt-4 text-xl">Nenhum produto disponível.</p>
                 </div>
               )}
             </div>
 
-           <Separator className="my-8 bg-primary/20" />
+           <Separator className="my-8 bg-gray-400" />
             
             <div>
-                <CardTitle className="text-2xl text-blue-500 flex items-center gap-3 mb-4">
+                <CardTitle className="text-2xl text-white flex items-center gap-3 mb-4">
                     <Facebook /> Catálogo do Facebook
                 </CardTitle>
                 <FacebookProductsStore />
             </div>
 
-           <Separator className="my-8 bg-primary/20" />
+           <Separator className="my-8 bg-gray-400" />
 
             <div>
-                <CardTitle className="text-2xl text-pink-500 flex items-center gap-3 mb-4">
+                <CardTitle className="text-2xl text-white flex items-center gap-3 mb-4">
                     <Instagram /> Galeria da Loja (@severetoys)
                 </CardTitle>
                 <InstagramShopFeed />
             </div>
         </CardContent>
       </Card>
-    </main>
   );
+}
+
+export default function LojaPage() {
+    return (
+        <PayPalScriptProvider options={{ "clientId": PAYPAL_CLIENT_ID || '', components: 'buttons', currency: 'BRL' }}>
+            <main className="flex flex-1 w-full flex-col items-center p-4 bg-background">
+                <LojaPageContent />
+            </main>
+        </PayPalScriptProvider>
+    );
 }

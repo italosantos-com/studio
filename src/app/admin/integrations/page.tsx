@@ -2,233 +2,232 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Facebook, Instagram, Twitter, LogOut, LogIn, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { connectService, disconnectService, getIntegrationStatus, type Integration } from './actions';
+import { getIntegrationStatus, disconnectService, type Integration } from './actions';
+import IntegrationCard from "./components/IntegrationCard";
 
-
-// Placeholder icons for PayPal and Mercado Pago
-const PayPalIcon = ({ className }: { className?: string }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M7.74,2.42,7.36,5.1a.21.21,0,0,0,.2.23l2.88-.1a.21.21,0,0,1,.21.23L9.6,13.75a.21.21,0,0,0,.21.22l2.37-.08a.21.21,0,0,1,.21.23L11.23,21.8a.22.22,0,0,0,.21.21h2.82a.22.22,0,0,0,.22-.2l2-13.43a.22.22,0,0,0-.21-.24l-3.23.11a.22.22,0,0,1-.21-.24L12.7,2.42a.21.21,0,0,0-.21-.21H8a.21.21,0,0,0-.24.21Z"/>
-        <path d="M10.87,14.57,11.82.93A.21.21,0,0,0,11.61.71H8.69a.21.21,0,0,0-.21.2L7.36,7.59a.22.22,0,0,0,.21.24l2.58-.09a.21.21,0,0,1,.21.23l-.93,6.3a.21.21,0,0,0,.21.22l2.74-.09a.21.21,0,0,0,.2-.23Z"/>
-    </svg>
-);
-
-const MercadoPagoIcon = ({ className }: { className?: string }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M18.3,4.22a.5.5,0,0,0-.49-.49l-13,1.45a.5.5,0,0,0-.42.5V18.17a.5.5,0,0,0,.35.48l13.3,2.44a.5.5,0,0,0,.55-.38l.68-15A.5.5,0,0,0,18.3,4.22ZM12,14.07a3.5,3.5,0,1,1,3.5-3.5A3.5,3.5,0,0,1,12,14.07Z"/>
-    </svg>
-);
-
+// Importar os ícones
+import { FacebookIcon } from '@/components/icons/FacebookIcon';
+import { InstagramIcon } from '@/components/icons/InstagramIcon';
+import { TwitterIcon } from '@/components/icons/TwitterIcon';
+import { PayPalIcon } from '@/components/icons/PayPalIcon';
+import { MercadoPagoIcon } from '@/components/icons/MercadoPagoIcon';
 
 export default function AdminIntegrationsPage() {
   const { toast } = useToast();
-  const [integrations, setIntegrations] = useState<Record<Integration, boolean>>({
+  const [integrations, setIntegrations] = useState<Record<string, boolean>>({
     twitter: false,
     instagram: false,
     facebook: false,
     paypal: false,
     mercadopago: false,
   });
-  const [isLoading, setIsLoading] = useState<Record<Integration, boolean> | null>(null);
+  const [isLoading, setIsLoading] = useState<Record<string, boolean>>({
+    twitter: true,
+    instagram: true,
+    facebook: true,
+    paypal: true,
+    mercadopago: true,
+  });
 
   useEffect(() => {
     async function fetchAllStatus() {
-        const services: Integration[] = ['twitter', 'instagram', 'facebook', 'paypal', 'mercadopago'];
-        const statuses = await Promise.all(services.map(service => getIntegrationStatus(service)));
-        const newIntegrationsState: Record<Integration, boolean> = {
-            twitter: false,
-            instagram: false,
-            facebook: false,
-            paypal: false,
-            mercadopago: false,
-        };
-        services.forEach((service, index) => {
-            newIntegrationsState[service] = statuses[index];
+        const services: Integration[] = ['twitter', 'instagram', 'facebook', 'paypal' as any, 'mercadopago' as any];
+        
+        const statuses = await Promise.all(services.map(async (service) => {
+            const status = await getIntegrationStatus(service as any);
+            return { service, status };
+        }));
+        
+        const newIntegrationsState: Record<string, boolean> = { ...integrations };
+        const newLoadingState: Record<string, boolean> = { ...isLoading };
+        
+        statuses.forEach(({ service, status }) => {
+            if (typeof status === 'object') {
+                newIntegrationsState[service] = status.connected;
+            } else {
+                newIntegrationsState[service] = status;
+            }
+            newLoadingState[service] = false;
         });
+
         setIntegrations(newIntegrationsState);
+        setIsLoading(newLoadingState);
     }
     fetchAllStatus();
   }, []);
 
-  const handleToggleIntegration = async (integration: Integration) => {
-    setIsLoading(prev => ({...(prev || {}), [integration]: true }));
-    const isConnected = integrations[integration];
+  const handleConnect = (platform: Integration) => {
+    setIsLoading(prev => ({ ...prev, [platform]: true }));
+    const width = 600;
+    const height = 700;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+    const url = `/api/auth/${platform}`;
+    const popup = window.open(url, '_blank', `width=${width},height=${height},top=${top},left=${left}`);
 
-    try {
-        let result: { success: boolean, message: string };
-        if (isConnected) {
-            result = await disconnectService(integration);
-        } else {
-            result = await connectService(integration);
+    const messageListener = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) {
+            return;
         }
 
-        if (result.success) {
-            setIntegrations(prevState => ({ ...prevState, [integration]: !isConnected }));
+        const { success, error, message, platform: eventPlatform, username } = event.data;
+
+        if (eventPlatform !== platform) {
+            return;
+        }
+
+        if (success) {
             toast({
-                title: `Integração ${!isConnected ? 'Conectada' : 'Desconectada'}`,
-                description: result.message,
+                title: "Conexão realizada com sucesso!",
+                description: `${platform.charAt(0).toUpperCase() + platform.slice(1)} foi conectado à sua conta.`,
             });
-        } else {
-             toast({
-                variant: 'destructive',
-                title: `Falha na Operação`,
-                description: result.message,
-            });
+            setIntegrations(prev => ({ ...prev, [platform]: true, ...(platform === 'instagram' && { facebook: true }) }));
+            
+            // Salvar o nome de usuário do Twitter no localStorage
+            if (platform === 'twitter' && username) {
+                localStorage.setItem('twitter_username', username);
+                toast({ 
+                    title: "Nome de usuário salvo!", 
+                    description: `O feed de vídeos agora usará @${username}.`,
+                });
+            }
         }
 
+        if (error) {
+            const errorMessages: Record<string, string> = {
+                'facebook_auth_failed': 'Falha na autenticação do Facebook',
+                'instagram_connection_failed': 'Falha na conexão com Instagram. Verifique se a página do Facebook tem uma conta do Instagram de negócios vinculada.',
+                'twitter_auth_failed': 'Falha na autenticação do Twitter',
+                'twitter_auth_denied': 'Você negou o acesso do aplicativo ao Twitter.',
+                'twitter_no_token': 'Token de autorização não recebido do Twitter.',
+                'firebase_init_failed': 'O sistema não está configurado corretamente (Firebase).',
+                'twitter_token_failed': 'Não foi possível obter os tokens de acesso do Twitter.',
+                'twitter_server_error': 'Ocorreu um erro no servidor ao tentar conectar com o Twitter.',
+                'paypal_auth_failed': 'Falha na autenticação com o PayPal.',
+                'mercadopago_auth_failed': 'Falha na autenticação com o Mercado Pago.',
+            };
+
+            toast({
+                variant: 'destructive',
+                title: "Erro na conexão",
+                description: message || errorMessages[error] || `Erro desconhecido: ${error}`,
+            });
+        }
+        setIsLoading(prev => ({ ...prev, [platform]: false }));
+        window.removeEventListener('message', messageListener);
+    };
+
+    window.addEventListener('message', messageListener);
+
+    const timer = setInterval(() => {
+        if (popup?.closed) {
+            clearInterval(timer);
+            setIsLoading(prev => ({ ...prev, [platform]: false }));
+            window.removeEventListener('message', messageListener);
+        }
+    }, 500);
+  };
+
+  const handleDisconnect = async (platform: Integration) => {
+    setIsLoading(prev => ({ ...prev, [platform]: true }));
+    try {
+      const result = await disconnectService(platform);
+      if (result.success) {
+        setIntegrations(prev => ({ ...prev, [platform]: false, ...(platform === 'instagram' && { facebook: false }) }));
+        toast({ title: "Desconectado com sucesso", description: result.message });
+
+        // Remover o nome de usuário do Twitter do localStorage
+        if (platform === 'twitter') {
+            localStorage.removeItem('twitter_username');
+            // Limpar cookies de autenticação do Twitter no servidor
+            try { await fetch('/api/auth/twitter/logout', { method: 'POST' }); } catch {}
+        }
+      } else {
+        toast({ variant: 'destructive', title: "Falha ao desconectar", description: result.message });
+      }
     } catch (error: any) {
-        toast({
-            variant: 'destructive',
-            title: `Erro de Servidor`,
-            description: error.message,
-        });
+      toast({ variant: 'destructive', title: "Erro no servidor", description: error.message });
     } finally {
-        setIsLoading(prev => ({...(prev || {}), [integration]: false }));
+      setIsLoading(prev => ({ ...prev, [platform]: false }));
+    }
+  };
+  
+  const handleSyncFeed = async (platform: 'instagram' | 'facebook') => {
+    setIsLoading(prev => ({ ...prev, [platform]: true }));
+    try {
+      const response = await fetch(`/api/admin/${platform}-feed`);
+      const result = await response.json();
+      if (result.success) {
+        toast({ title: "Sincronização Concluída", description: result.message });
+      } else {
+        toast({ variant: 'destructive', title: "Falha na Sincronização", description: result.message });
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: "Erro de Rede", description: "Não foi possível conectar ao servidor para sincronizar o feed." });
+    } finally {
+      setIsLoading(prev => ({ ...prev, [platform]: false }));
     }
   };
 
-  const IntegrationCard = ({
-    platform,
-    icon: Icon,
-    color,
-    description,
-    isConnected,
-  }: {
-    platform: Integration;
-    icon: React.ElementType;
-    color: string;
-    description: string;
-    isConnected: boolean;
-  }) => {
-
-    const isCardLoading = isLoading?.[platform] ?? false;
-
-    const connectButton = (
-      <Button 
-        variant="default" 
-        onClick={() => handleToggleIntegration(platform)}
-        disabled={isCardLoading}
-      >
-        {isCardLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
-        Conectar
-      </Button>
-    );
-
-    return (
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Icon className={`h-8 w-8 ${color}`} />
-              <div>
-                <h3 className="font-semibold capitalize">{platform}</h3>
-                <p className="text-sm text-muted-foreground">{description}</p>
-              </div>
-            </div>
-              {isConnected ? (
-                <Button 
-                    variant="destructive" 
-                    onClick={() => handleToggleIntegration(platform)}
-                    disabled={isCardLoading}
-                >
-                    {isCardLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOut className="mr-2 h-4 w-4" />}
-                     Desconectar
-                </Button>
-              ) : (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    {connectButton}
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Conectar ao {platform}</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Esta ação simula a conexão com {platform}. A integração completa com OAuth 2.0 requer configuração de backend adicional.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleToggleIntegration(platform)}>Continuar</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )
-            }
-          </div>
-        </Card>
-      );
-  }
+  const integrationData = [
+    {
+      platform: 'paypal',
+      title: 'PayPal',
+      description: 'Conecte sua conta para receber pagamentos na loja.',
+      icon: <PayPalIcon />,
+    },
+    {
+      platform: 'mercadopago',
+      title: 'Mercado Pago',
+      description: 'Conecte sua conta para receber pagamentos via Pix e outros métodos.',
+      icon: <MercadoPagoIcon />,
+    },
+    {
+        platform: 'facebook',
+        title: 'Facebook',
+        description: 'Exibir galeria de fotos e posts recentes.',
+        icon: <FacebookIcon />,
+        onSync: () => handleSyncFeed('facebook'),
+    },
+    {
+        platform: 'instagram',
+        title: 'Instagram',
+        description: 'Exibir galeria de fotos e posts recentes.',
+        icon: <InstagramIcon />,
+        onSync: () => handleSyncFeed('instagram'),
+    },
+    {
+        platform: 'twitter',
+        title: 'Twitter / X',
+        description: 'Exibir feed de fotos recentes.',
+        icon: <TwitterIcon />,
+    },
+  ];
 
   return (
     <>
       <div className="flex items-center">
         <h1 className="text-lg font-semibold md:text-2xl">Integrações de Plataformas</h1>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Conectar Contas</CardTitle>
-          <CardDescription>
-            Gerencie as conexões com redes sociais e serviços de pagamento. O status de conectado/desconectado é salvo no servidor.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+        {integrationData.map((data) => (
           <IntegrationCard
-            platform="facebook"
-            icon={Facebook}
-            color="text-[#1877F2]"
-            description="Conecte sua página para posts e login."
-            isConnected={integrations.facebook}
+            key={data.platform}
+            platform={data.platform}
+            title={data.title}
+            description={data.description}
+            icon={data.icon}
+            isConnected={integrations[data.platform]}
+            isLoading={isLoading[data.platform]}
+            onConnect={() => handleConnect(data.platform as Integration)}
+            onDisconnect={() => handleDisconnect(data.platform as Integration)}
+            onSync={data.onSync}
+            syncing={isLoading[data.platform]}
           />
-           <IntegrationCard
-            platform="instagram"
-            icon={Instagram}
-            color="text-[#E4405F]"
-            description="Importe sua galeria de fotos e login."
-            isConnected={integrations.instagram}
-          />
-          <IntegrationCard
-            platform="twitter"
-            icon={Twitter}
-            color="text-[#1DA1F2]"
-            description="Sincronize seu feed de vídeos e login."
-            isConnected={integrations.twitter}
-          />
-           <IntegrationCard
-            platform="paypal"
-            icon={PayPalIcon}
-            color="text-[#0070BA]"
-            description="Conecte para processar pagamentos e login."
-            isConnected={integrations.paypal}
-          />
-           <IntegrationCard
-            platform="mercadopago"
-            icon={MercadoPagoIcon}
-            color="text-[#00B1EA]"
-            description="Habilite o checkout do Mercado Pago e login."
-            isConnected={integrations.mercadopago}
-          />
-        </CardContent>
-      </Card>
+        ))}
+      </div>
     </>
   );
 }

@@ -1,17 +1,21 @@
 
 "use client";
 
+import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/use-subscription';
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, User as UserIcon, CheckCircle, BellRing, CreditCard, Lock, ArrowRight, Video, Star, PlayCircle, Mail } from 'lucide-react';
+import { LogOut, User as UserIcon, CheckCircle, BellRing, CreditCard, Lock, ArrowRight, Video, Star, PlayCircle, Mail, CornerDownRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Loader2 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import ReviewsSection from '@/components/reviews/reviews-section';
 
 interface Video {
   id: string;
@@ -33,24 +37,21 @@ const purchasedVideosExample: Video[] = [
     { id: 'pur_vid_2', title: 'Cena Deletada: O Encontro', thumbnailUrl: 'https://placehold.co/600x400.png', aiHint: 'deleted scene' },
 ]
 
-export default function DashboardPage() {
+export default function AssinantePage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { subscription, plan, hasActiveSubscription, isLoading: subscriptionLoading } = useSubscription();
   const [purchasedVideos, setPurchasedVideos] = useState<Video[]>([]);
   const [isLoadingVideos, setIsLoadingVideos] = useState(true);
-  const [hasSubscription, setHasSubscription] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [customerEmail, setCustomerEmail] = useState('usuario@exemplo.com');
   
   useEffect(() => {
     setIsClient(true);
-    // Simula a verificação do status da assinatura e busca o email do cliente
-    if (localStorage.getItem('hasSubscription') === 'true' || localStorage.getItem('hasPaid') === 'true') {
-        setHasSubscription(true);
-        const savedEmail = localStorage.getItem('customerEmail');
-        if (savedEmail) {
-            setCustomerEmail(savedEmail);
-        }
+    // Buscar email do cliente do localStorage
+    const savedEmail = localStorage.getItem('customerEmail');
+    if (savedEmail) {
+      setCustomerEmail(savedEmail);
     }
   }, []);
 
@@ -100,6 +101,8 @@ export default function DashboardPage() {
     }
     router.push('/');
   };
+  
+
 
   const UserProfileCard = () => (
      <Card className="w-full animate-in fade-in-0 zoom-in-95 duration-500 shadow-neon-red-strong border-primary/50 bg-card/90 backdrop-blur-xl">
@@ -110,10 +113,10 @@ export default function DashboardPage() {
               <AvatarFallback className="text-3xl bg-muted">U</AvatarFallback>
             </Avatar>
           </div>
-           <CardTitle className="text-3xl text-shadow-neon-red-light">
+           <CardTitle className="text-3xl text-white">
                 Bem-vindo(a)!
             </CardTitle>
-          <CardDescription>Painel do Cliente</CardDescription>
+          <CardDescription>Painel do Assinante</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
             <div className="flex items-center gap-4">
@@ -149,14 +152,42 @@ export default function DashboardPage() {
   );
 
   const SubscriptionSection = () => (
-    <Card className="w-full animate-in fade-in-0 zoom-in-95 duration-500 shadow-neon-red-strong border-primary/50 bg-card/90 backdrop-blur-xl">
+    <Card className="w-full animate-in fade-in-0 zoom-in-95 duration-500 shadow-lg border-gray-400 bg-card/90 backdrop-blur-xl">
         <CardHeader>
-            <CardTitle className="text-2xl text-shadow-neon-red-light flex items-center gap-2"><Star /> Vídeos da Assinatura</CardTitle>
-            <CardDescription>Conteúdo exclusivo liberado para assinantes.</CardDescription>
+            <CardTitle className="text-2xl text-white flex items-center gap-2">
+              <Star /> 
+              {hasActiveSubscription ? 'Sua Assinatura' : 'Vídeos da Assinatura'}
+            </CardTitle>
+            <CardDescription>
+              {hasActiveSubscription
+                ? `Plano ${plan?.name || 'Ativo'} - ${subscription ? `Expira em ${new Date(subscription.expirationDate).toLocaleDateString('pt-BR')}` : 'Ativo'}`
+                : 'Conteúdo exclusivo liberado para assinantes.'
+              }
+            </CardDescription>
         </CardHeader>
         <CardContent>
-             {hasSubscription ? (
-                <VideoGrid videos={subscriptionVideos} onVideoClick={(id) => router.push(`/dashboard/videos?id=${id}`)} />
+             {hasActiveSubscription ? (
+                <div className="space-y-4">
+                  {subscription && plan && (
+                    <div className="p-4 bg-gray-900 rounded-lg border border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-semibold text-white">{plan.name}</h4>
+                          <p className="text-sm text-gray-400">
+                            Ativo até {new Date(subscription.expirationDate).toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-white">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plan.price)}
+                          </p>
+                          <p className="text-xs text-green-600 dark:text-green-400">Via {subscription.paymentMethod}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <VideoGrid videos={subscriptionVideos} onVideoClick={(id) => router.push(`/assinante/videos?id=${id}`)} />
+                </div>
             ) : (
                 <div className="text-center p-6 bg-muted/30 rounded-lg border border-dashed border-border">
                     <Lock className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -177,7 +208,7 @@ export default function DashboardPage() {
   const PurchasedVideosSection = () => (
     <Card className="w-full animate-in fade-in-0 zoom-in-95 duration-500 shadow-neon-red-strong border-primary/50 bg-card/90 backdrop-blur-xl">
         <CardHeader>
-            <CardTitle className="text-2xl text-shadow-neon-red-light flex items-center gap-2"><Video /> Vídeos Comprados Avulsos</CardTitle>
+            <CardTitle className="text-2xl text-white flex items-center gap-2"><Video /> Vídeos Comprados Avulsos</CardTitle>
             <CardDescription>Acesse aqui os vídeos que você comprou na loja.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -186,7 +217,7 @@ export default function DashboardPage() {
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
             ) : purchasedVideos.length > 0 ? (
-                <VideoGrid videos={purchasedVideos} onVideoClick={(id) => router.push(`/dashboard/videos?id=${id}`)} />
+                <VideoGrid videos={purchasedVideos} onVideoClick={(id) => router.push(`/assinante/videos?id=${id}`)} />
             ) : (
                  <div className="text-center p-6 bg-muted/30 rounded-lg border border-dashed border-border">
                     <p className="text-muted-foreground">Você ainda não comprou nenhum vídeo avulso.</p>
@@ -196,7 +227,7 @@ export default function DashboardPage() {
     </Card>
   );
 
-  if (!isClient) {
+  if (!isClient || subscriptionLoading) {
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -210,7 +241,13 @@ export default function DashboardPage() {
             <UserProfileCard />
             <SubscriptionSection />
             <PurchasedVideosSection />
+
+            <Separator className="my-8 bg-primary/20" />
+            
+            <ReviewsSection title="Comentários" maxReviews={10} />
        </div>
     </main>
   );
 }
+
+    

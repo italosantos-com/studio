@@ -21,7 +21,7 @@ export async function getCloudflareChatInfo(): Promise<{ orgId: string | undefin
  * @returns Uma string de token de autenticação simulada.
  */
 export async function generateAuthTokenAction(userId: string): Promise<string> {
-    console.log(`Gerando token para o usuário: ${userId}`);
+    
     // Simula a geração de um token
     await new Promise(resolve => setTimeout(resolve, 1000));
     return `dummy_token_for_${userId}_${Math.random().toString(36).substring(2, 10)}`;

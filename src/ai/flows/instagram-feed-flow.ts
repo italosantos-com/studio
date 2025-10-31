@@ -43,13 +43,24 @@ const fetchInstagramProfileMediaFlow = ai.defineFlow(
   },
   async () => {
     
-    const accessToken = process.env.INSTAGRAM_FEED_ACCESS_TOKEN;
+    let accessToken;
+    try {
+      accessToken = process.env.INSTAGRAM_FEED_ACCESS_TOKEN;
+      // Log apenas para desenvolvimento
+      if (process.env.NODE_ENV === 'development') {
+
+      }
+    } catch (error: any) {
+      
+      return { media: [], error: `Não foi possível carregar o feed do Instagram. Motivo: Erro ao acessar token: ${error.message}` };
+    }
+    
     const userId = 'me'; // Usar "me" para se referir ao usuário autenticado pelo token.
     const maxResults = 50;
 
     if (!accessToken || accessToken === "YOUR_INSTAGRAM_FEED_ACCESS_TOKEN") {
       const errorMessage = "O token de acesso do Instagram para o feed (@severepics) não está configurado no ambiente do servidor (INSTAGRAM_FEED_ACCESS_TOKEN).";
-      console.warn(errorMessage);
+      
       return { media: [], error: errorMessage };
     }
 
@@ -59,9 +70,16 @@ const fetchInstagramProfileMediaFlow = ai.defineFlow(
     try {
       const response = await fetch(url);
       if (!response.ok) {
-        const errorData = await response.json();
-        const errorMessage = `Erro ao buscar mídia do perfil no Instagram: ${errorData.error.message}`;
-        console.error("Erro da API do Instagram (Feed Flow):", errorData.error);
+        const errorText = await response.text();
+        let errorMessage;
+        try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = `Erro ao buscar mídia do perfil no Instagram: ${errorData.error.message}`;
+    
+        } catch(e) {
+            errorMessage = `Erro ao buscar mídia do perfil no Instagram. Resposta não-JSON recebida: ${errorText}`;
+    
+        }
         return { media: [], error: errorMessage };
       }
       
@@ -70,8 +88,15 @@ const fetchInstagramProfileMediaFlow = ai.defineFlow(
       return result;
 
     } catch (error: any) {
-        console.error('Erro no fluxo ao buscar feed do Instagram:', error);
-        const errorMessage = error.message || "Erro desconhecido ao acessar a API do Instagram.";
+
+        let errorMessage = error.message || "Erro desconhecido ao acessar a API do Instagram.";
+        
+        // Detectar especificamente erros de descriptografia
+        if (errorMessage.includes('decrypt') || errorMessage.includes('Failed to decrypt')) {
+          errorMessage = "Erro ao descriptografar o token de acesso do Instagram. O token pode estar em formato inválido ou corrompido.";
+
+        }
+        
         return { media: [], error: `Não foi possível carregar o feed. Motivo: ${errorMessage}` };
     }
   }

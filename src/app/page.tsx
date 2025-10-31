@@ -1,365 +1,491 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
-import { Fingerprint, CheckCircle, Loader2, KeyRound, Copy } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
-import AboutSection from '@/components/about-section';
-import AuthModal from '@/components/auth-modal';
-import { convertCurrency } from '@/ai/flows/currency-conversion-flow';
-import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { createPixPayment, type CreatePixPaymentOutput } from '@/ai/flows/mercado-pago-pix-flow';
+import { KeyRound, Loader2, Fingerprint } from 'lucide-react';
 import Image from 'next/image';
-import { cn } from '@/lib/utils';
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
-import { getPayPalClientId, createPayPalOrder, capturePayPalOrder } from "@/ai/flows/paypal-payment-flow";
-import { savePaymentDetails } from '@/services/user-auth-service';
+import Link from 'next/link';
+import { useToast } from '@/hooks/use-toast';
+import { convertCurrency } from '@/ai/flows/currency-conversion-flow';
+import { useFaceIDAuth } from '@/contexts/face-id-auth-context';
+import { useAuth } from '@/contexts/AuthProvider';
+import { useRouter } from 'next/navigation';
+import { clearAuthData } from '@/lib/auth-cleanup';
+import FeatureMarquee from '@/components/feature-marquee';
+import AboutSection from '@/components/about-section';
+import GallerySection from '@/components/gallery/gallery-section';
+import LocationMap from '@/components/location-map';
+import ReviewsFormSection from '@/components/reviews/reviews-form-section';
+import PixPaymentModal from '@/components/pix-payment-modal';
+import GPayPaymentModal from '@/components/gpay-payment-modal';
+import ApplePayPaymentModal from '@/components/applepay-payment-modal';
 
+import PayPalButton from '@/components/paypal-button-enhanced';
+import { useProfileConfig } from '@/hooks/use-profile-config';
+import { useSubscriptionSettings } from '@/hooks/use-subscription-settings';
+import LoginTypeModal from '@/components/login-type-modal';
 
-const features = [
-    "Conteúdo exclusivo e sem censura.",
-    "Acesso a vídeos e ensaios completos.",
-    "Atualizações semanais com novas produções.",
-    "Comunidade e interação direta.",
-];
-
-const FeatureList = () => (
-    <div className="relative w-full overflow-hidden bg-background py-4">
-        <div className="flex animate-marquee whitespace-nowrap">
-            {features.map((feature, index) => (
-                <span key={index} className="flex items-center mx-4 text-muted-foreground text-lg">
-                    <CheckCircle className="h-5 w-5 mr-3 text-primary" />
-                    {feature}
-                </span>
-            ))}
-            {features.map((feature, index) => (
-                 <span key={`dup-${index}`} className="flex items-center mx-4 text-muted-foreground text-lg" aria-hidden="true">
-                    <CheckCircle className="h-5 w-5 mr-3 text-primary" />
-                    {feature}
-                </span>
-            ))}
-        </div>
-    </div>
-);
-
-
-const PayPalWrapper = ({ priceInfo, customerInfo, onPaymentSuccess }: { priceInfo: any, customerInfo: {name: string, email: string}, onPaymentSuccess: (details: any) => void }) => {
+export default function Home() {
     const { toast } = useToast();
-    const [clientId, setClientId] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-
+    const router = useRouter();
+    const { isAuthenticated, userEmail } = useFaceIDAuth();
+    const { user: firebaseUser, userProfile } = useAuth();
+    const { coverPhoto, settings: profileSettings, loading: profileLoading } = useProfileConfig();
+    const { pixValue: adminPixValue, loading: subscriptionLoading, refreshSettings } = useSubscriptionSettings();
+    
+    const [paymentInfo, setPaymentInfo] = useState(() => {
+        return {
+            value: '99.00',
+            currency: 'BRL',
+            symbol: 'R$'
+        };
+    });
+    const [isLoadingCurrency, setIsLoadingCurrency] = useState(true);
+    const [userCurrency, setUserCurrency] = useState<string>('BRL');
+    
+    // DETECÇÃO DE MOEDA DESABILITADA - SEMPRE BRL
+    /* 
+    // Detectar moeda do usuário baseada na localização
     useEffect(() => {
-        const fetchClientId = async () => {
-            setIsLoading(true);
+        const detectUserCurrency = () => {
             try {
-                const id = await getPayPalClientId();
-                if (!id) throw new Error("Client ID do PayPal não foi recebido do servidor.");
-                setClientId(id);
-            } catch (error: any) {
-                console.error("Erro ao buscar Client ID do PayPal:", error);
-                toast({
-                    variant: "destructive",
-                    title: "Erro de Configuração do PayPal",
-                    description: error.message || "Não foi possível carregar as credenciais de pagamento.",
-                });
-            } finally {
-                setIsLoading(false);
+                const locale = navigator.language || 'pt-BR';
+                const currencyMap: Record<string, string> = {
+                    'en-US': 'USD',
+                    'en-GB': 'GBP', 
+                    'pt-BR': 'BRL',
+                    'es': 'EUR',
+                    'fr': 'EUR',
+                    'de': 'EUR',
+                    'it': 'EUR'
+                };
+                
+                const detectedCurrency = currencyMap[locale] || 'BRL';
+                setUserCurrency(detectedCurrency);
+            } catch (error) {
+                setUserCurrency('BRL');
             }
         };
-        fetchClientId();
-    }, [toast]);
+        
+        detectUserCurrency();
+    }, []);
+    */
+    const [isPixModalOpen, setIsPixModalOpen] = useState(false);
+    const [isGPayModalOpen, setIsGPayModalOpen] = useState(false);
+    const [isLoginTypeModalOpen, setIsLoginTypeModalOpen] = useState(false);
+    const [isApplePayModalOpen, setIsApplePayModalOpen] = useState(false);
 
-    if (isLoading) {
-        return (
-             <div className="h-20 flex justify-center items-center bg-gray-800 rounded-md">
-                <Loader2 className="h-6 w-6 animate-spin text-white" />
-            </div>
-        );
-    }
+    const [simulatedMethod, setSimulatedMethod] = useState<'pix' | 'google' | 'apple' | null>(null);
+    const [authStatus, setAuthStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
 
-    if (!clientId) {
-        return (
-             <div className="h-20 flex justify-center items-center bg-gray-800 rounded-md">
-                <p className="text-xs text-white">Chave do cliente PayPal não encontrada.</p>
-            </div>
-        );
-    }
-    
-    return (
-        <PayPalScriptProvider options={{ clientId: clientId, currency: priceInfo.currencyCode || "BRL", components: "buttons" }}>
-            <PayPalButtons
-                style={{ layout: "horizontal", tagline: false, height: 55, color: 'blue' }}
-                createOrder={async (data, actions) => {
-                    try {
-                        const result = await createPayPalOrder({ amount: priceInfo.amount, currencyCode: priceInfo.currencyCode });
-                        if (result.orderID) {
-                            return result.orderID;
-                        }
-                        throw new Error(result.error || "Falha ao criar ordem no servidor.");
-                    } catch (error: any) {
-                        toast({ variant: 'destructive', title: 'Erro ao Criar Pedido', description: error.message });
-                        return '';
-                    }
-                }}
-                onApprove={async (data, actions) => {
-                    try {
-                        if (!actions.order) {
-                            throw new Error('A ordem de captura não está disponível.');
-                        }
-                        const details = await actions.order.capture();
-                        onPaymentSuccess(details);
-                    } catch (error: any) {
-                         toast({ variant: 'destructive', title: 'Erro na Aprovação', description: error.message });
-                    }
-                }}
-                 onError={(err) => {
-                    toast({ variant: 'destructive', title: 'Erro no Pagamento', description: 'Ocorreu um erro inesperado com o PayPal.'});
-                    console.error("Erro no PayPal Button: ", err);
-                }}
-                fundingSource="paypal"
-                disabled={!customerInfo.name || !customerInfo.email}
-            />
-        </PayPalScriptProvider>
-    );
-}
+    // VERIFICAÇÃO RIGOROSA DE AUTENTICAÇÃO
+    useEffect(() => {
+        const checkAuthentication = () => {
 
+            
 
-export default function HomePage() {
-  const router = useRouter();
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [priceInfo, setPriceInfo] = useState<{amount: number, currencyCode: string, currencySymbol: string} | null>(null);
-  const [isLoadingPrice, setIsLoadingPrice] = useState(true);
-  const { toast } = useToast();
-  
-  // State for Pix Modal
-  const [isPixModalOpen, setIsPixModalOpen] = useState(false);
-  const [pixEmail, setPixEmail] = useState('');
-  const [pixName, setPixName] = useState('');
-  const [isGeneratingPix, setIsGeneratingPix] = useState(false);
-  const [pixData, setPixData] = useState<CreatePixPaymentOutput | null>(null);
-  
-  const handlePaymentSuccess = async (details: any) => {
-      localStorage.setItem('hasPaid', 'true');
-      localStorage.setItem('customerEmail', pixEmail);
-      toast({
-          title: "Pagamento Aprovado!",
-          description: "Você será redirecionado para a autenticação para finalizar seu acesso."
-      });
+            
+            // Verificar múltiplas fontes de autenticação
+            const localStorage_auth = localStorage.getItem('isAuthenticated') === 'true';
+            const sessionStorage_auth = sessionStorage.getItem('isAuthenticated') === 'true';
+            const context_auth = isAuthenticated;
+            const hasUserEmail = userEmail && userEmail.trim() !== '';
+            const hasUserProfile = userProfile && userProfile.email;
+            const hasFirebaseUser = firebaseUser && firebaseUser.email;
+            
+            // CRITÉRIOS RIGOROSOS: deve estar autenticado E ter email válido
+            const isAuthenticatedAnywhere = localStorage_auth || sessionStorage_auth || context_auth || hasFirebaseUser;
+            const hasValidEmail = hasUserEmail || hasUserProfile || hasFirebaseUser;
+            
 
-      try {
-        await savePaymentDetails({
-            paymentId: details.id || `pix_${Date.now()}`,
-            customerEmail: pixEmail,
-            customerName: pixName,
+            
+            if (isAuthenticatedAnywhere) {
+
+                setAuthStatus('authenticated');
+                return;
+            }
+            
+
+            setAuthStatus('unauthenticated');
+        };
+
+        // Verificar imediatamente
+        checkAuthentication();
+        
+        // Verificar periodicamente a cada 3 segundos
+        const authInterval = setInterval(checkAuthentication, 3000);
+        
+        return () => clearInterval(authInterval);
+    }, [isAuthenticated, userEmail, userProfile, firebaseUser, router, toast]);
+
+    // CONVERSÃO DE MOEDA DESABILITADA - SEMPRE MOSTRAR EM BRL
+    useEffect(() => {
+        // Aguardar até que as configurações sejam carregadas E o valor seja válido
+        if (subscriptionLoading || adminPixValue <= 0) {
+            return;
+        }
+        
+        // SEMPRE usar BRL sem conversão
+        setPaymentInfo({
+            value: adminPixValue.toFixed(2),
+            currency: 'BRL',
+            symbol: 'R$'
         });
-      } catch (error) {
-        console.error("Falha ao salvar detalhes do pagamento:", error);
-        // Não bloqueia o usuário, mas registra o erro.
-      }
-      
-      setIsAuthModalOpen(true);
-  };
+        setIsLoadingCurrency(false);
+        
+        /* CONVERSÃO DE MOEDA COMENTADA
+        // Se a moeda do usuário for BRL, não precisa converter
+        if (userCurrency === 'BRL') {
+            setPaymentInfo({
+                value: adminPixValue.toFixed(2),
+                currency: 'BRL',
+                symbol: 'R$'
+            });
+            setIsLoadingCurrency(false);
+            return;
+        }
+        
+        setIsLoadingCurrency(true);
+        
+        try {
+            // Usar o valor do admin como base para conversão
+            const response = await fetch('/api/genkit/convertCurrency', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    targetCurrency: userCurrency,
+                    baseAmount: adminPixValue // Usar valor do admin como base
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                setPaymentInfo({
+                    value: data.convertedAmount.toFixed(2),
+                    currency: data.targetCurrency,
+                    symbol: data.currencySymbol
+                });
+            } else {
+                setPaymentInfo({
+                    value: adminPixValue.toFixed(2),
+                    currency: 'BRL',
+                    symbol: 'R$'
+                });
+            }
+        } catch (error) {
+            setPaymentInfo({
+                value: adminPixValue.toFixed(2),
+                currency: 'BRL',
+                symbol: 'R$'
+            });
+        }
+        
+        setIsLoadingCurrency(false);
+        */
+    }, [adminPixValue, subscriptionLoading]);
 
-  useEffect(() => {
-    const userLocale = navigator.language || 'pt-BR';
-    const getLocalCurrency = async () => {
-      try {
-        const response = await convertCurrency({ targetLocale: userLocale });
-        setPriceInfo(response);
-      } catch (error) {
-        console.error("Failed to convert currency, defaulting to BRL.", error);
-        setPriceInfo({ amount: 99.00, currencyCode: 'BRL', currencySymbol: 'R$' });
-      } finally {
-        setIsLoadingPrice(false);
-      }
+
+
+    const handlePaymentSuccess = async (paymentDetails?: any) => {
+
+        toast({ title: 'Pagamento bem-sucedido!', description: 'Seja bem-vindo(a) ao conteúdo exclusivo!' });
+        
+        // Salvar localmente para compatibilidade
+        localStorage.setItem('hasPaid', 'true');
+        localStorage.setItem('hasSubscription', 'true');
+        localStorage.setItem('userType', 'vip');
+        localStorage.setItem('subscriptionDate', new Date().toISOString());
+
+        
+        // ✅ SIMPLIFICADO: Usar API de subscription diretamente
+        if (paymentDetails) {
+            try {
+                const response = await fetch('/api/subscription', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'createSubscription',
+                        customerEmail: paymentDetails.email || 'unknown@example.com',
+                        paymentId: paymentDetails.id || `payment_${Date.now()}`
+                    }),
+                });
+                
+                if (response.ok) {
+
+                } else {
+
+                }
+            } catch (error) {
+
+                // Não bloquear o fluxo se der erro ao salvar
+            }
+        }
+        
+
+        router.push('/assinante');
+    };
+
+    // Função para abrir o modal simulando o método
+    const openPaymentModal = (method: 'pix') => {
+        if (authStatus !== 'authenticated') {
+            toast({
+                variant: "destructive",
+                title: "Login Necessário",
+                description: "Faça login com Face ID para usar o Pix e assinar.",
+            });
+            return;
+        }
+        setSimulatedMethod(method);
+        setIsPixModalOpen(true);
+    };
+
+    // Ajusta os handlers dos botões
+    const handleGooglePayClick = () => {
+        if (authStatus !== 'authenticated') {
+            toast({
+                variant: "destructive",
+                title: "Login Necessário",
+                description: "Faça login com Face ID para usar o Google Pay e assinar.",
+            });
+            return;
+        }
+        setIsGPayModalOpen(true);
+    };
+
+    const handleApplePayClick = () => {
+        if (authStatus !== 'authenticated') {
+            toast({
+                variant: "destructive",
+                title: "Login Necessário",
+                description: "Faça login com Face ID para usar o Apple Pay e assinar.",
+            });
+            return;
+        }
+        setIsApplePayModalOpen(true);
     };
     
-    getLocalCurrency();
-    
-  }, [router, toast]);
-  
-  const handleGeneratePix = async () => {
-      if (!pixEmail || !pixName) {
-          toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Por favor, insira seu nome e e-mail para gerar o Pix.' });
-          return;
-      }
-      if (!priceInfo) return;
 
-      setIsGeneratingPix(true);
-      setPixData(null);
-      try {
-          const result = await createPixPayment({
-              amount: priceInfo.amount,
-              email: pixEmail
-          });
-          if (result.qrCodeBase64) {
-              setPixData(result);
-              toast({ title: 'QR Code gerado com sucesso!' });
-          } else {
-              throw new Error(result.error || 'Falha ao gerar QR Code.');
-          }
-      } catch (error: any) {
-          toast({ variant: 'destructive', title: 'Erro ao gerar Pix', description: error.message });
-      } finally {
-          setIsGeneratingPix(false);
-      }
-  }
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast({ title: "Copiado para a área de transferência!" });
-  };
-  
-  return (
-    <>
-      <div className="flex flex-col items-center">
-        <div className="p-4 md:p-8 bg-background flex flex-col items-center gap-6 w-full max-w-md text-center">
-          
-          <div className="w-full space-y-4">
-              <Button 
-                  className="w-full h-20 bg-primary/90 hover:bg-primary text-primary-foreground text-3xl font-semibold shadow-neon-red-light hover:shadow-neon-red-strong transition-all duration-300"
-                  onClick={() => setIsAuthModalOpen(true)}>
-                  <Fingerprint className="h-12 w-12 mr-4" />
-                  Face ID
-              </Button>
-            
-            <div className="flex items-center justify-center gap-2">
-                 {!isLoadingPrice && priceInfo && (
-                     <div className="flex-1">
-                        <PayPalWrapper priceInfo={priceInfo} customerInfo={{name: pixName, email: pixEmail}} onPaymentSuccess={handlePaymentSuccess} />
-                    </div>
-                 )}
-                
-                {/* Botão Pix */}
-                 {!isLoadingPrice && (
-                    <button
-                        onClick={() => setIsPixModalOpen(true)}
-                        className="w-24 h-16 bg-transparent border-none p-0 transition-transform duration-200 ease-in-out hover:scale-105"
-                        aria-label="Pagar com Pix"
-                      >
-                        <Image
-                          src='https://firebasestorage.googleapis.com/v0/b/authkit-y9vjx.firebasestorage.app/o/WhatsApp%20Image%202025-07-25%20at%2021.41.37.jpeg?alt=media&token=4cfc8616-1e75-4eb2-8936-fbae3f2bc649'
-                          alt="Pix payment button"
-                          width={96}
-                          height={67}
-                          className="object-contain w-full h-full mix-blend-screen"
-                          data-ai-hint="payment button"
-                          unoptimized
-                        />
-                    </button>
-                 )}
+    return (
+        <>
+            <div 
+                className="relative w-full h-[35vh] sm:h-[40vh] md:h-[50vh] flex items-center justify-center"
+            >
+                <Image
+                    src={coverPhoto || "https://placehold.co/1200x400.png"}
+                    alt="Background"
+                    layout="fill"
+                    objectFit="cover"
+                    className="opacity-80"
+                    data-ai-hint="male model"
+                    priority
+                    onError={(e) => {
+                        console.log('🖼️ Erro ao carregar imagem de capa, usando fallback');
+                        e.currentTarget.src = "https://placehold.co/1200x400.png";
+                    }}
+                />
+                {/* Overlay escuro para aumentar contraste do nome */}
+                <div className="absolute inset-0 bg-black/60 z-10" />
+                <h1 
+                    className="font-bold text-white shadow-neon-white z-20 px-2 sm:px-4 text-center leading-tight"
+                    style={{ 
+                        fontSize: 'clamp(2rem, 8vw, 8rem)',
+                        fontFamily: '"Times New Roman", Times, serif', 
+                        WebkitTextStroke: '1px #222', 
+                        textShadow: '0 0 16px rgba(255, 255, 255, 0.9), 0 0 32px rgba(255, 255, 255, 0.7), 0 0 48px rgba(255, 255, 255, 0.5)',
+                        filter: 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.8))',
+                        minHeight: '4rem'
+                    }}
+                >
+                    {profileLoading ? (
+                        <span style={{ visibility: 'hidden' }}>Italo Santos</span>
+                    ) : (
+                        profileSettings?.name || 'Italo Santos'
+                    )}
+                </h1>
             </div>
-            
-             <div className="text-center py-4 space-y-4">
-                {isLoadingPrice ? (
-                     <div className="flex items-center justify-center h-[72px]">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary"/>
-                    </div>
-                ) : (
-                    priceInfo && (
-                       <div className="text-center">
-                            <p className="text-muted-foreground">Assinatura Mensal</p>
-                            <h3 className="font-bold text-6xl text-primary text-shadow-neon-red animate-pulse-glow">
-                                {priceInfo.currencySymbol} {priceInfo.amount.toFixed(2)}
-                                <span className="text-lg text-muted-foreground ml-1">{priceInfo.currencyCode}</span>
-                            </h3>
+
+            <main className="flex-grow flex flex-col items-center w-full">
+                <div className="relative z-10 flex flex-col items-center justify-center flex-1 w-full max-w-4xl mx-auto px-3 sm:px-4">
+                    
+                    <div className="w-full max-w-[320px] sm:max-w-md flex flex-col items-center gap-y-3 sm:gap-y-4 pt-6 sm:pt-8 md:pt-14">
+                                                  <Button asChild className="w-full h-14 sm:h-16 md:h-18 text-base sm:text-lg md:text-xl bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center transform scale-110 sm:scale-115 md:scale-120 shadow-neon-white hover:shadow-neon-red-strong transition-all duration-300">
+                                                        <Link href="/auth/face" className="flex flex-col items-center justify-center">
+    <div className="flex items-center">
+        <Fingerprint className="mr-2 h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" />
+        <span>Cadastre-se</span>
+    </div>
+    <span className="text-xs font-normal" style={{ marginTop: '-4px' }}>Face ID</span>
+</Link>
+                         </Button>
+
+                         <div className="flex items-center justify-center w-full max-w-md mt-3 sm:mt-4 md:mt-6 gap-x-1 sm:gap-x-2 md:gap-x-4">
+                            <button 
+                                className="flex-1 cursor-pointer bg-transparent border-none p-0 transition-transform hover:scale-105"
+                                onClick={handleGooglePayClick}
+                                aria-label="Pagar com Google Pay"
+                            >
+                                <Image
+                                    src="/google-pay.png"
+                                    alt="Google Pay"
+                                    width={242} 
+                                    height={98}
+                                    className="w-full h-auto object-contain max-h-[110px] sm:max-h-[130px] md:max-h-[150px]"
+                                />
+                            </button>
+                             <div className="flex flex-col items-center justify-center px-1 w-[50px] sm:w-[60px] md:w-[70px]">
+                                <button
+                                    className="w-full transition-transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center"
+                                    onClick={() => openPaymentModal('pix')}
+                                    aria-label="Pagar com PIX"
+                                    disabled={isLoadingCurrency}
+                                >
+                                    <Image
+                                        src="/pix.png"
+                                        alt="PIX"
+                                        width={55}
+                                        height={98}
+                                        className="w-full h-auto object-contain max-h-[150px] sm:max-h-[170px] md:max-h-[190px]"
+                                    />
+                                                                         <span className="text-[7px] sm:text-[8px] md:text-[10px] text-primary mt-1 text-nowrap">PIX</span>
+                                </button>
+                            </div>
+                            <button 
+                                className="flex-1 bg-transparent border-none p-0 transition-transform hover:scale-105 active:scale-95"
+                                onClick={handleApplePayClick}
+                                aria-label="Pagar com Apple Pay"
+                            >
+                               <Image
+                                    src="/apple-pay.png"
+                                    alt="Apple Pay"
+                                    width={242}
+                                    height={98}
+                                    className="w-full h-auto object-contain max-h-[110px] sm:max-h-[130px] md:max-h-[150px]"
+                                />
+                            </button>
                         </div>
-                    )
-                )}
-            </div>
 
-            <Button 
-                className="w-full h-16 bg-primary/90 hover:bg-primary text-primary-foreground text-2xl font-semibold shadow-neon-red-light hover:shadow-neon-red-strong transition-all duration-300"
-                onClick={() => setIsAuthModalOpen(true)}>
-                <KeyRound className="h-10 w-10 mr-4" />
-                ENTRAR
-            </Button>
-          </div>
-        </div>
-        <FeatureList />
-        <AboutSection />
-      </div>
-      <AuthModal isOpen={isAuthModalOpen} onOpenChange={setIsAuthModalOpen} />
-      
-      {/* Pix Payment Modal */}
-      <Dialog open={isPixModalOpen} onOpenChange={setIsPixModalOpen}>
-        <DialogContent className="sm:max-w-md bg-card/90 backdrop-blur-xl border-primary/50">
-            <DialogHeader>
-                <DialogTitle className="text-2xl text-primary text-shadow-neon-red-light">Pagamento com Pix</DialogTitle>
-                <DialogDescription>
-                    {pixData ? 'Escaneie o QR Code com seu aplicativo de banco.' : 'Insira seus dados para gerar o código Pix.'}
-                </DialogDescription>
-            </DialogHeader>
+                        <div className="text-center py-3 sm:py-4 min-h-[70px] sm:min-h-[80px] md:min-h-[100px] flex flex-col items-center justify-center">
+                            <p className="text-sm sm:text-base md:text-lg">Assinatura Mensal</p>
+                             {isLoadingCurrency ? (
+                                 <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10 mx-auto animate-spin text-white" />
+                             ) : (
+                                <p className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-none">
+                                    {paymentInfo.value.split('.')[0]}
+                                    <span className="text-2xl sm:text-3xl md:text-4xl align-top">.{paymentInfo.value.split('.')[1]}</span>
+                                    <span className="text-lg sm:text-xl md:text-2xl font-normal align-top ml-1">{paymentInfo.symbol}</span>
+                                </p>
+                             )}
+                            <div className="w-full h-14 sm:h-16 md:h-20 mt-3 sm:mt-4">
+                                {authStatus === 'checking' ? (
+                                    <div className="w-full h-full bg-muted rounded-lg flex items-center justify-center border border-primary/20">
+                                        <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 md:h-5 md:w-5 animate-spin text-primary" />
+                                        <span className="ml-2 text-muted-foreground text-xs sm:text-sm md:text-base">Verificando...</span>
+                                    </div>
+                                ) : authStatus === 'authenticated' ? (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                        <PayPalButton
+                                            onSuccess={handlePaymentSuccess}
+                                            amount={parseFloat(paymentInfo.value)}
+                                            currency={paymentInfo.currency}
+                                            description="Assinatura Mensal Premium"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="relative w-full h-full">
+                                        {/* Botão PayPal oficial como fundo */}
+                                        <div className="w-full h-full bg-blue-500 rounded-lg flex items-center justify-center shadow-lg">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-md flex items-center justify-center">
+                                                    <span className="text-blue-500 font-bold text-sm sm:text-base">P</span>
+                                                </div>
+                                                <span className="text-white font-semibold text-sm sm:text-base md:text-lg">Pay with PayPal</span>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Overlay transparente com aviso */}
+                                        <div className="absolute inset-0 bg-transparent rounded-lg flex items-center justify-center cursor-pointer" 
+                                             onClick={() => {
+                                                 toast({
+                                                     variant: "destructive",
+                                                     title: "Login Necessário",
+                                                     description: "Faça login com Face ID para usar o PayPal e assinar.",
+                                                 });
+                                             }}>
+                                            <div className="text-center bg-black/70 backdrop-blur-sm px-3 py-2 rounded-md border border-white/20">
+                                                <div className="text-xs sm:text-sm font-semibold text-white">🔐 Login Necessário</div>
+                                                <div className="text-[10px] sm:text-xs text-white/80">Clique para mais informações</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        
+                        {/* Selo de Segurança */}
+                        <div className="flex items-center justify-center gap-x-3 sm:gap-x-4 py-3 sm:py-4 md:py-6 px-4 sm:px-6 md:px-8 bg-card border border-primary/30 rounded-lg shadow-neon-white hover:shadow-neon-red-strong transition-all duration-300">
+                            <img src="/shield.svg" alt="Escudo de segurança" className="h-10 w-10 sm:h-12 sm:w-12 md:h-16 md:w-16" />
+                            <div className="text-center">
+                                <p className="text-xs sm:text-sm md:text-base font-semibold text-primary">100% Seguro & Protegido</p>
+                                <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">SSL Certificado • Dados Criptografados</p>
+                            </div>
+                        </div>
+                        
+                        {/* Botão Entrar */}
+                        <div className="w-full max-w-[280px] sm:max-w-sm mt-4">
+                            <Button 
+                                onClick={() => setIsLoginTypeModalOpen(true)}
+                                className="w-full h-12 sm:h-14 md:h-16 text-base sm:text-lg md:text-xl bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center transform scale-110 sm:scale-115 md:scale-120 shadow-neon-white hover:shadow-neon-red-strong transition-all duration-300"
+                            >
+                                <KeyRound className="mr-2 h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" />
+                                Entrar
+                            </Button>
+                        </div>
+                        
 
-            {isGeneratingPix && (
-                 <div className="flex items-center justify-center h-48">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                </div>
-            )}
-
-            {!isGeneratingPix && pixData?.qrCodeBase64 ? (
-                <div className="space-y-4 text-center">
-                    <Image
-                        src={`data:image/png;base64,${pixData.qrCodeBase64}`}
-                        alt="Pix QR Code"
-                        width={256}
-                        height={256}
-                        className="mx-auto rounded-lg border-4 border-primary"
-                        data-ai-hint="qr code"
-                    />
-                    <Label htmlFor="pix-code">Ou copie o código:</Label>
-                    <div className="relative">
-                       <Input id="pix-code" readOnly value={pixData.qrCode} className="pr-10 text-xs font-mono"/>
-                       <Button size="icon" variant="ghost" className="absolute top-1/2 right-1 -translate-y-1/2 h-8 w-8" onClick={() => copyToClipboard(pixData.qrCode || '')}>
-                            <Copy className="h-4 w-4"/>
-                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">Após o pagamento, clique em continuar para finalizar seu acesso.</p>
                 </div>
-            ) : !isGeneratingPix && (
-                 <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="name">Nome</Label>
-                        <Input 
-                            id="name" 
-                            type="text" 
-                            placeholder="Seu nome completo"
-                            value={pixName}
-                            onChange={(e) => setPixName(e.target.value)}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="email">Seu e-mail</Label>
-                        <Input 
-                            id="email" 
-                            type="email" 
-                            placeholder="seu.email@exemplo.com"
-                            value={pixEmail}
-                            onChange={(e) => setPixEmail(e.target.value)}
-                        />
-                    </div>
-                </div>
-            )}
+            
+                <FeatureMarquee />
+                <AboutSection />
+                <GallerySection />
+                <LocationMap />
+                <ReviewsFormSection />
+            </main>
 
-            <DialogFooter>
-                {!pixData ? (
-                    <Button type="button" onClick={handleGeneratePix} disabled={isGeneratingPix || !pixEmail || !pixName} className="w-full">
-                       {isGeneratingPix ? <Loader2 className="h-4 w-4 mr-2 animate-spin"/> : null}
-                       {isGeneratingPix ? 'Gerando...' : 'Gerar QR Code Pix'}
-                    </Button>
-                ) : (
-                    <Button type="button" onClick={() => handlePaymentSuccess({ id: 'pix_payment' })} className="w-full">
-                       Já paguei, continuar
-                    </Button>
-                )}
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+            <PixPaymentModal 
+                isOpen={isPixModalOpen}
+                onOpenChange={setIsPixModalOpen}
+                amount={parseFloat(paymentInfo.value)}
+                onPaymentSuccess={handlePaymentSuccess}
+                paymentMethod={simulatedMethod || 'pix'}
+                currency={paymentInfo.currency}
+                originalAmountBRL={adminPixValue}
+            />
+            <GPayPaymentModal
+                isOpen={isGPayModalOpen}
+                onOpenChange={setIsGPayModalOpen}
+                amount={parseFloat(paymentInfo.value)}
+                currency={paymentInfo.currency}
+                symbol={paymentInfo.symbol}
+                onPaymentSuccess={handlePaymentSuccess}
+            />
+            <LoginTypeModal
+                isOpen={isLoginTypeModalOpen}
+                onClose={() => setIsLoginTypeModalOpen(false)}
+            />
+            <ApplePayPaymentModal
+                isOpen={isApplePayModalOpen}
+                onOpenChange={setIsApplePayModalOpen}
+                amount={parseFloat(paymentInfo.value)}
+                currency={paymentInfo.currency}
+                symbol={paymentInfo.symbol}
+                onPaymentSuccess={handlePaymentSuccess}
+            />
+
+
+        </>
+    );
+
 }

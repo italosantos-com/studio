@@ -1,0 +1,89 @@
+# ========================================
+# .gcloudignore - Studio Italo Santos
+# Arquivos que não devem ser enviados para o Google Cloud
+# ========================================
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Next.js (dev)
+.next/
+out/
+
+# Testing
+coverage/
+.nyc_output/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment
+.env
+.env.local
+.env.development
+.env.test
+
+# Firebase (local)
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+
+# Documentation
+README.md
+docs/
+*.md
+
+# Scripts (não necessários em produção)
+scripts/
+
+# Outros
+.idx/
+.dataconnect/
+ios-web-payments/
+firebase-genkit/
+
+# Arquivos temporários
+*.log
+*.pid
+*.seed
+*.pid.lock
+.tmp/
+temp/
+
+# Certificados locais
+*.pem
+*.key
+*.crt
+certs/
+
+# Arquivos de teste
+test-*.js
+test-*.ts
+test-*.html
+TESTE_*.md
+RESUMO_*.md
+
+# Config files locais
+.firebaserc
+firebase.json
+docker-compose.yml
+Dockerfile

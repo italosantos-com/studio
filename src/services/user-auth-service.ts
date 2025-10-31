@@ -3,12 +3,15 @@
 /**
  * @fileOverview User authentication and payment service using Firebase Realtime Database and Storage.
  * Handles saving user data, face images, and payment details.
+ * TEMPORÁRIO: Funcionalidades server-side desabilitadas quando Admin SDK não está disponível.
  */
 
-import { adminApp } from '@/lib/firebase-admin';
+import { getAdminApp } from '@/lib/firebase-admin';
 import { getDatabase } from 'firebase-admin/database';
 import { getStorage } from 'firebase-admin/storage';
 import { z } from 'zod';
+import { auth } from '@/lib/firebase';
+import { signInAnonymously } from 'firebase/auth';
 
 // Schema for user data to be saved.
 const UserDataSchema = z.object({
@@ -26,9 +29,12 @@ const PaymentDetailsSchema = z.object({
 });
 type PaymentDetails = z.infer<typeof PaymentDetailsSchema>;
 
-const db = getDatabase(adminApp);
-const storage = getStorage(adminApp);
-const bucket = storage.bucket('authkit-y9vjx.appspot.com');
+// Verificar se o Admin SDK está disponível
+const adminApp = getAdminApp();
+const isAdminAvailable = adminApp !== null;
+const db = isAdminAvailable ? getDatabase(adminApp!) : null;
+const storage = isAdminAvailable ? getStorage(adminApp!) : null;
+const bucket = storage ? storage.bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.appspot.com`) : null;
 
 /**
  * Saves user data to Realtime Database and uploads their face image to Storage.
@@ -36,11 +42,16 @@ const bucket = storage.bucket('authkit-y9vjx.appspot.com');
  * @returns A Promise that resolves when the user is saved.
  */
 export async function saveUser(userData: UserData): Promise<void> {
+    if (!isAdminAvailable) {
+        console.log('[saveUser] Admin SDK não disponível. Funcionalidade server-side desabilitada.');
+        throw new Error('Server-side functionality not available. Admin SDK not configured.');
+    }
+
     const { name, email, phone, imageBase64 } = userData;
 
     // 1. Upload image to Firebase Storage
     const fileName = `italosantos.com/facial-auth-users/${Date.now()}_${email.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`;
-    const file = bucket.file(fileName);
+    const file = bucket!.file(fileName);
     const buffer = Buffer.from(imageBase64.split(',')[1], 'base64');
 
     await file.save(buffer, {
@@ -52,7 +63,7 @@ export async function saveUser(userData: UserData): Promise<void> {
     const publicUrl = file.publicUrl();
 
     // 2. Save user metadata to Realtime Database
-    const usersRef = db.ref('facialAuth/users');
+    const usersRef = db!.ref('facialAuth/users');
     const newUserRef = usersRef.push(); // Generate a unique ID
     
     await newUserRef.set({
@@ -77,7 +88,12 @@ export async function getAllUsers(): Promise<Array<{
     email: string;
     imageUrl: string;
 }>> {
-    const usersRef = db.ref('facialAuth/users');
+    if (!isAdminAvailable) {
+        console.log('[getAllUsers] Admin SDK não disponível. Retornando array vazio.');
+        return [];
+    }
+
+    const usersRef = db!.ref('facialAuth/users');
     const snapshot = await usersRef.once('value');
     
     if (!snapshot.exists()) {
@@ -101,9 +117,14 @@ export async function getAllUsers(): Promise<Array<{
  * @returns A Promise that resolves when the details are saved.
  */
 export async function savePaymentDetails(paymentDetails: PaymentDetails): Promise<void> {
+  if (!isAdminAvailable) {
+      console.log('[savePaymentDetails] Admin SDK não disponível. Funcionalidade server-side desabilitada.');
+      throw new Error('Server-side functionality not available. Admin SDK not configured.');
+  }
+
   const { paymentId, customerEmail, customerName } = paymentDetails;
   
-  const paymentsRef = db.ref('payments');
+  const paymentsRef = db!.ref('payments');
   const newPaymentRef = paymentsRef.child(paymentId); // Use paymentId as the key
 
   await newPaymentRef.set({
@@ -113,4 +134,19 @@ export async function savePaymentDetails(paymentDetails: PaymentDetails): Promis
   });
 
   console.log(`Payment ${paymentId} for ${customerEmail} saved successfully.`);
+}
+
+/**
+ * Signs in the user anonymously using Firebase Authentication.
+ * @returns A Promise that resolves with the user's UID.
+ */
+export async function signInAnonymouslyAndGetId(): Promise<string> {
+  try {
+    const userCredential = await signInAnonymously(auth);
+    console.log('User signed in anonymously:', userCredential.user.uid);
+    return userCredential.user.uid;
+  } catch (error) {
+    console.error('Error signing in anonymously:', error);
+    throw new Error('Failed to sign in anonymously. Please try again.');
+  }
 }

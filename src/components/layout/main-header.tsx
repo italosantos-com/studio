@@ -4,7 +4,7 @@
 
  const MainHeader = () => {
  return (
- <div className="relative w-full h-[80vh] text-center flex items-center justify-center bg-black">
+ <div className="relative w-full h-[104vh] text-center flex items-center justify-center bg-black">
  <Image
  src="https://placehold.co/1920x1080.png"
  alt="Hero background"
@@ -14,8 +14,8 @@
  data-ai-hint="male model"
  priority
  />
- <div className="relative border-4 border-primary p-4 shadow-neon-red-strong">
- <h1 className="text-9xl font-serif text-white text-shadow-neon-red">Italo Santos</h1>
+ <div className="relative border-4 border-gray-400 p-6 shadow-lg">
+ <h1 className="text-[10.4rem] font-serif text-white">Italo Santos</h1>
  </div>
  </div>
  );

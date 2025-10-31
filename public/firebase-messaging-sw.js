@@ -4,13 +4,13 @@ importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compa
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyC7yaXjEFWFORvyLyHh1O5SPYjRCzptTg8",
-  authDomain: "authkit-y9vjx.firebaseapp.com",
-  projectId: "authkit-y9vjx",
-  storageBucket: "authkit-y9vjx.appspot.com",
-  messagingSenderId: "308487499277",
-  appId: "1:308487499277:web:3fde6468b179432e9f2f44",
-  measurementId: "G-XKJWPXDPZS"
+  apiKey: "AIzaSyAgQVYgZ62v1RIKmcxHQcYjNVcj2Bv0hh8",
+  authDomain: "facepass-afhid.firebaseapp.com",
+  projectId: "facepass-afhid",
+  storageBucket: "facepass-afhid.firebasestorage.app",
+  messagingSenderId: "423019559653",
+  appId: "1:423019559653:web:dc278b16cac06e0dfaf20c",
+  measurementId: "G-VBFV45J460"
 };
 
 
@@ -21,7 +21,7 @@ firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Received background message ', payload);
+
   // Customize notification here
   const notificationTitle = payload.notification.title;
   const notificationOptions = {

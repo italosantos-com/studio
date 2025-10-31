@@ -13,6 +13,8 @@ import { MercadoPagoConfig, Payment } from 'mercadopago';
 const CreatePixPaymentInputSchema = z.object({
   amount: z.number().describe('O valor do pagamento em BRL.'),
   email: z.string().email().describe('O e-mail do pagador.'),
+  name: z.string().describe('O nome completo do pagador.'),
+  phone: z.string().optional().describe('O telefone do pagador.'),
 });
 export type CreatePixPaymentInput = z.infer<typeof CreatePixPaymentInputSchema>;
 
@@ -33,13 +35,17 @@ const createPixPaymentFlow = ai.defineFlow(
     inputSchema: CreatePixPaymentInputSchema,
     outputSchema: CreatePixPaymentOutputSchema,
   },
-  async ({ amount, email }) => {
-    const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  async (input: CreatePixPaymentInput) => {
+    const { amount, email, name } = input;
+    const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
-    if (!accessToken || accessToken === "YOUR_MERCADOPAGO_ACCESS_TOKEN") {
-      const errorMessage = "O token de acesso do Mercado Pago (MERCADOPAGO_ACCESS_TOKEN) não está configurado.";
-      console.error(errorMessage);
+    if (!accessToken) {
+      const errorMessage = "Token do Mercado Pago não configurado. Verifique a variável MERCADOPAGO_ACCESS_TOKEN.";
       return { error: errorMessage };
+    }
+
+    if (accessToken === "YOUR_MERCADOPAGO_ACCESS_TOKEN" || accessToken.includes("TEST-")) {
+      
     }
 
     const client = new MercadoPagoConfig({ 
@@ -48,14 +54,23 @@ const createPixPaymentFlow = ai.defineFlow(
     });
     const payment = new Payment(client);
     
+    const nameParts = name.split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || firstName;
+
     const paymentData = {
       transaction_amount: amount,
       description: 'Assinatura Mensal - Italo Santos',
       payment_method_id: 'pix',
       payer: {
         email: email,
+        first_name: firstName,
+        last_name: lastName,
       },
-      notification_url: 'https://seusite.com/api/webhook/mercadopago', // Você precisará criar este endpoint
+      // Só incluir notification_url se não estiver em desenvolvimento local
+      ...(process.env.NODE_ENV === 'production' && {
+        notification_url: `${process.env.NEXT_PUBLIC_BASE_URL}/api/webhook/mercadopago`,
+      }),
     };
 
     try {
@@ -65,6 +80,7 @@ const createPixPaymentFlow = ai.defineFlow(
       const qrCode = response.point_of_interaction?.transaction_data?.qr_code;
 
       if (!qrCodeBase64 || !qrCode) {
+
         throw new Error('A resposta da API do Mercado Pago não incluiu os dados do QR Code.');
       }
 
@@ -74,8 +90,36 @@ const createPixPaymentFlow = ai.defineFlow(
       };
 
     } catch (error: any) {
-      console.error('Erro ao criar pagamento Pix:', error?.cause || error.message);
-      return { error: 'Não foi possível gerar o código Pix. Por favor, tente novamente mais tarde.' };
+      
+      
+      let errorMessage = 'Não foi possível gerar o código Pix. Por favor, tente novamente mais tarde.';
+      
+      if (error.cause) {
+        // Erros da SDK do Mercado Pago geralmente têm uma causa aninhada
+
+        
+        if (error.cause.error) {
+          if (error.cause.error.includes('invalid_access_token')) {
+            errorMessage = 'Token do Mercado Pago inválido. Verifique as configurações.';
+          } else if (error.cause.error.includes('invalid_amount')) {
+            errorMessage = 'Valor inválido para pagamento PIX.';
+          } else if (error.cause.error.includes('invalid_email')) {
+            errorMessage = 'Email inválido para pagamento PIX.';
+          } else {
+            errorMessage = error.cause.error;
+          }
+        } else {
+          errorMessage = error.cause.message || errorMessage;
+        }
+      } else if (error.message) {
+        if (error.message.includes('fetch')) {
+          errorMessage = 'Erro de conexão com Mercado Pago. Verifique sua internet.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      return { error: errorMessage };
     }
   }
 );

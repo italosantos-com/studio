@@ -43,7 +43,8 @@ const translateFlow = ai.defineFlow(
     inputSchema: TranslateInputSchema,
     outputSchema: TranslateOutputSchema,
   },
-  async ({ text, targetLanguage }) => {
+  async (input: TranslateInput) => {
+    const { text, targetLanguage } = input;
     const prompt = `Translate the following text to ${targetLanguage}: "${text}"`;
     const { output } = await ai.generate({
         prompt,
@@ -66,8 +67,9 @@ const detectLanguageFlow = ai.defineFlow(
         inputSchema: DetectLanguageInputSchema,
         outputSchema: DetectLanguageOutputSchema,
     },
-    async ({ text }) => {
-        const prompt = `Detect the language of the following text and return only its ISO 639-1 code (e.g., "en", "pt", "es"): "${text}"`;
+  async (input: DetectLanguageInput) => {
+    const { text } = input;
+    const prompt = `Detect the language of the following text and return only its ISO 639-1 code (e.g., "en", "pt", "es"): "${text}"`;
         const { output } = await ai.generate({
             prompt,
             model: 'googleai/gemini-2.0-flash',

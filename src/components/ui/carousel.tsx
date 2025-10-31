@@ -1,10 +1,10 @@
 "use client"
 
 import * as React from "react"
+import { ArrowLeft, ArrowRight } from "lucide-react"
 import useEmblaCarousel, {
   type UseEmblaCarouselType,
 } from "embla-carousel-react"
-import { ArrowLeft, ArrowRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -97,14 +97,6 @@ const Carousel = React.forwardRef<
       },
       [scrollPrev, scrollNext]
     )
-
-    React.useEffect(() => {
-      if (!api || !setApi) {
-        return
-      }
-
-      setApi(api)
-    }, [api, setApi])
 
     React.useEffect(() => {
       if (!api) {

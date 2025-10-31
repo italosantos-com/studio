@@ -7,14 +7,14 @@ import Sidebar from './sidebar';
 import FetishModal from '@/components/fetish-modal';
 import type { Fetish } from '@/lib/fetish-data';
 import AdultWarningDialog from '@/components/adult-warning-dialog';
-import MainHeader from './main-header';
 import MainFooter from './main-footer';
-import SiteFooter from './site-footer';
 import { usePathname } from 'next/navigation';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import SecretChatWidget from '@/components/secret-chat-widget';
 import SecretChatButton from '@/components/secret-chat-button';
+
+
 
 const getOrCreateChatId = (): string => {
     if (typeof window === 'undefined') {
@@ -45,8 +45,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     }
 
     const trackVisitor = async () => {
-        if (pathname.startsWith('/admin')) return;
+        if (pathname?.startsWith('/admin')) return;
 
+        // Track chat visitor
         const chatId = getOrCreateChatId();
         if (chatId) {
             const chatDocRef = doc(db, 'chats', chatId);
@@ -55,9 +56,31 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                     lastSeen: serverTimestamp(),
                 }, { merge: true });
             } catch (error) {
-                console.error("Error creating/updating visitor tracking document:", error);
+                // Error handled silently
             }
         }
+        
+        // Track page view - Temporarily disabled for development
+        /*
+        if (pathname) {
+            // Sanitize path to use as a document ID in Firestore
+            const docId = pathname === '/' ? 'home' : pathname.replace(/\//g, '_');
+            const pageViewRef = doc(db, 'pageViews', docId);
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const pageViewDoc = await transaction.get(pageViewRef);
+                    if (!pageViewDoc.exists()) {
+                        transaction.set(pageViewRef, { path: pathname, count: 1, lastViewed: serverTimestamp() });
+                    } else {
+                        const newCount = pageViewDoc.data().count + 1;
+                        transaction.update(pageViewRef, { count: newCount, lastViewed: serverTimestamp() });
+                    }
+                });
+            } catch (error) {
+                // Error handled silently
+            }
+        }
+        */
     };
 
     trackVisitor();
@@ -90,14 +113,14 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     return null;
   }
 
-  const isAdminPanel = pathname.startsWith('/admin');
-  const noMainLayoutRoutes = ['/auth', '/old-auth-page', '/dashboard', '/dashboard/videos', '/chat-secreto'];
-  const showHeader = !noMainLayoutRoutes.some(route => pathname.startsWith(route)) && !isAdminPanel;
-  const showMainHeader = showHeader && pathname === '/';
-  const showMainFooter = pathname === '/';
-  const showSiteFooter = !noMainLayoutRoutes.some(route => pathname.startsWith(route)) && pathname !== '/' && !isAdminPanel;
-  const showChat = !isAdminPanel;
+  const isAdminPanel = pathname?.startsWith('/admin') ?? false;
+  const noHeaderLayoutRoutes = ['/auth', '/old-auth-page', '/chat-secreto'];
+  const showHeader = !noHeaderLayoutRoutes.some(route => pathname?.startsWith(route) ?? false) && !isAdminPanel;
+  
+  const showSiteFooter = !noHeaderLayoutRoutes.some(route => pathname?.startsWith(route) ?? false) && !isAdminPanel;
+  const showChat = !isAdminPanel && !pathname?.startsWith('/auth');
 
+  // Para rotas do admin, retornar apenas o children sem nenhum wrapper
   if (isAdminPanel) {
     return <>{children}</>;
   }
@@ -113,22 +136,20 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             onClose={toggleSidebar} 
             onFetishSelect={handleFetishSelect} 
         />
-        {showMainHeader && <MainHeader />}
-        <main className="flex-grow">{children}</main>
-        {showMainFooter && <MainFooter />}
-        {showSiteFooter && <SiteFooter />}
+        <main className="flex-grow flex flex-col items-center">{children}</main>
+        {showSiteFooter && <MainFooter />}
       </div>
       {showChat && (
         <>
-            <SecretChatWidget isOpen={isChatOpen} />
+            <SecretChatWidget isOpen={isChatOpen} onClose={toggleChat} />
             <SecretChatButton onClick={toggleChat} isChatOpen={isChatOpen} />
         </>
       )}
       {selectedFetish && (
-        <FetishModal
-          fetish={selectedFetish}
-          isOpen={!!selectedFetish}
-          onClose={handleCloseModal}
+        <FetishModal 
+          fetish={selectedFetish} 
+          isOpen={!!selectedFetish} 
+          onClose={handleCloseModal} 
         />
       )}
     </>
