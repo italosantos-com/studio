@@ -1,0 +1,17 @@
+{
+    "IDX.agenticWorkspace": true,
+    "IDX.aI.showChatInEditorTab": true,
+    "files.exclude": {
+        "**/ios-web-payments": true
+    },
+    "search.exclude": {
+        "**/ios-web-payments": true
+    },
+    "files.watcherExclude": {
+        "**/ios-web-payments/**": true
+    },
+    "sonarlint.connectedMode.project": {
+        "connectionId": "italosantos",
+        "projectKey": "YOUR_SONARQUBE_PROJECT_KEY"
+    }
+}
