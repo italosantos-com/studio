@@ -1,8 +1,8 @@
 {
   "projects": {
-    "default": "YOUR_FIREBASE_PROJECT_ID",
-    "italo": "YOUR_FIREBASE_PROJECT_ID",
-    "italosantos-com": "YOUR_FIREBASE_PROJECT_ID"
+    "default": "facepass-afhid",
+    "italo": "facepass-afhid",
+    "italosantos-com": "facepass-afhid"
   },
   "targets": {},
   "etags": {}

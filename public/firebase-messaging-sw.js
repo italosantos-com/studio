@@ -4,13 +4,13 @@ importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compa
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "YOUR_FIREBASE_API_KEY",
-  authDomain: "YOUR_FIREBASE_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_FIREBASE_PROJECT_ID",
-  storageBucket: "YOUR_FIREBASE_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "1:YOUR_MESSAGING_SENDER_ID:web:3fde6468b179432e9f2f44",
-  measurementId: "YOUR_MEASUREMENT_ID"
+  apiKey: "AIzaSyAgQVYgZ62v1RIKmcxHQcYjNVcj2Bv0hh8",
+  authDomain: "facepass-afhid.firebaseapp.com",
+  projectId: "facepass-afhid",
+  storageBucket: "facepass-afhid.firebasestorage.app",
+  messagingSenderId: "423019559653",
+  appId: "1:423019559653:web:dc278b16cac06e0dfaf20c",
+  measurementId: "G-VBFV45J460"
 };
 
 
