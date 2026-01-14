@@ -2,31 +2,13 @@
 'use server';
 /**
  * @fileOverview User authentication flow using Firebase Storage, Realtime Database, and AI face comparison.
- * - registerUser: Registers a new user by storing their data and face image.
  * - verifyUser: Authenticates a user by comparing their face image against all stored images.
+ * Fixed TypeScript type issues
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { saveUser, getAllUsers } from '@/services/user-auth-service';
-import { detectFace } from '@/services/vision';
-
-// Input schema for user registration
-const RegisterUserInputSchema = z.object({
-  name: z.string(),
-  email: z.string().email(),
-  phone: z.string(),
-  imageBase64: z.string().describe("A base64 encoded image captured from the user's camera."),
-});
-export type RegisterUserInput = z.infer<typeof RegisterUserInputSchema>;
-
-// Output schema for registration
-const RegisterUserOutputSchema = z.object({
-  success: z.boolean(),
-  message: z.string(),
-  errorCode: z.enum(['NO_FACE_DETECTED', 'POOR_IMAGE_QUALITY', 'SAVE_FAILED', 'UNKNOWN']).optional(),
-});
-export type RegisterUserOutput = z.infer<typeof RegisterUserOutputSchema>;
+import { getAllUsers } from '@/services/user-auth-service';
 
 // Input schema for user authentication
 const VerifyUserInputSchema = z.object({
@@ -43,41 +25,7 @@ const VerifyUserOutputSchema = z.object({
 });
 export type VerifyUserOutput = z.infer<typeof VerifyUserOutputSchema>;
 
-const VIP_URL = "/dashboard";
-
-/**
- * Genkit flow to register a new user.
- * It validates the face using Google Vision API, then saves the user data.
- */
-const registerUserFlow = ai.defineFlow(
-  {
-    name: 'registerUserFlow',
-    inputSchema: RegisterUserInputSchema,
-    outputSchema: RegisterUserOutputSchema,
-  },
-  async (userData) => {
-    try {
-      // 1. Validate face using Google Vision API
-      const faceValidation = await detectFace(userData.imageBase64);
-      if (!faceValidation.faceDetected) {
-        return { 
-          success: false, 
-          message: faceValidation.error || 'Nenhuma face válida detectada.',
-          errorCode: faceValidation.errorCode,
-        };
-      }
-
-      // 2. Save user data to Realtime DB and image to Storage
-      await saveUser(userData);
-      
-      console.log(`User ${userData.name} registered successfully.`);
-      return { success: true, message: 'Usuário registrado com sucesso!' };
-    } catch (e: any) {
-      console.error('Error during user registration flow:', e);
-      return { success: false, message: e.message || 'An unexpected error occurred during registration.', errorCode: 'SAVE_FAILED' };
-    }
-  }
-);
+const VIP_URL = "/assinante";
 
 /**
  * Genkit flow to authenticate a user by comparing their face against all stored images
@@ -89,38 +37,32 @@ const verifyUserFlow = ai.defineFlow(
     inputSchema: VerifyUserInputSchema,
     outputSchema: VerifyUserOutputSchema,
   },
-  async ({ imageBase64 }) => {
+  async (input: VerifyUserInput): Promise<VerifyUserOutput> => {
+    const { imageBase64 } = input;
     try {
-      console.log('Starting user verification flow...');
+  
       
-      // 1. Validate the new face image first
-      const faceValidation = await detectFace(imageBase64);
-      if (!faceValidation.faceDetected) {
-        return { 
-          success: false, 
-          message: faceValidation.error || 'Nenhuma face válida detectada na sua imagem.',
-          errorCode: 'NO_FACE_DETECTED',
-        };
-      }
-
-      // 2. Get all registered users
       const allUsers = await getAllUsers();
 
       if (allUsers.length === 0) {
-        console.log('No registered users found.');
-        return { success: false, message: 'Nenhum usuário cadastrado. Por favor, registre-se primeiro.', errorCode: 'NO_USERS_FOUND' };
+
+        const result: VerifyUserOutput = { 
+          success: false, 
+          message: 'Nenhum usuário cadastrado. Por favor, registre-se primeiro.', 
+          errorCode: 'NO_USERS_FOUND'
+        };
+        return result;
       }
       
-      console.log(`Found ${allUsers.length} users to check. Comparing against the provided image.`);
       
-      // 3. Iterate through each registered user and compare their face.
+      
       for (const user of allUsers) {
         if (!user.imageUrl) {
-            console.log(`Skipping user ${user.email} as they have no imageUrl.`);
+  
             continue;
         }
 
-        console.log(`Comparing face with user: ${user.email}`);
+        
         const { output } = await ai.generate({
             model: 'googleai/gemini-2.0-flash',
             prompt: `
@@ -134,42 +76,51 @@ const verifyUserFlow = ai.defineFlow(
               {{media url=storedImage}}
             `,
             context: {
-              loginImage: { url: imageBase64 }, // Pass the new image as a data URI
-              storedImage: { url: user.imageUrl }, // Pass the stored image as a URL
+              loginImage: { url: `data:image/jpeg;base64,${imageBase64.split(',')[1]}` }, 
+              storedImage: { url: user.imageUrl },
             },
             output: {
               format: 'text'
             },
             config: {
-              temperature: 0, // Be deterministic
+              temperature: 0, 
             }
         });
         
         const resultText = (output as string || "").trim().toUpperCase();
-        console.log(`AI verification result for ${user.email}: "${resultText}"`);
+        
 
-        // If a match is found, immediately return success.
         if (resultText.includes('SIM')) {
-            console.log(`User verification successful for ${user.email}.`);
-            return { success: true, message: 'Autenticado! Redirecionando...', redirectUrl: VIP_URL };
+
+            const result: VerifyUserOutput = { 
+              success: true, 
+              message: `Autenticado com sucesso! Redirecionando para a área do assinante...`, 
+              redirectUrl: VIP_URL 
+            };
+            return result;
         }
       }
 
-      // If the loop completes and no match was found.
-      console.log('User verification failed: No matching user found after checking all images.');
-      return { success: false, message: 'Rosto não reconhecido. Tente novamente ou cadastre-se.', errorCode: 'MATCH_NOT_FOUND' };
+      
+      const result: VerifyUserOutput = { 
+        success: false, 
+        message: 'Rosto não reconhecido. Tente novamente ou cadastre-se.', 
+        errorCode: 'MATCH_NOT_FOUND'
+      };
+      return result;
 
-    } catch (e: any)      {
-      console.error('Error during user verification flow:', e);
-      return { success: false, message: e.message || 'Ocorreu um erro inesperado durante a verificação.', errorCode: 'VERIFICATION_FAILED' };
+    } catch (e: any) {
+
+      const errorMessage = typeof e?.message === 'string' ? e.message : 'Ocorreu um erro inesperado durante a verificação.';
+      const result: VerifyUserOutput = { 
+        success: false, 
+        message: errorMessage, 
+        errorCode: 'VERIFICATION_FAILED'
+      };
+      return result;
     }
   }
 );
-
-// Exported functions to be called from the client-side.
-export async function registerUser(input: RegisterUserInput): Promise<RegisterUserOutput> {
-  return registerUserFlow(input);
-}
 
 export async function verifyUser(input: VerifyUserInput): Promise<VerifyUserOutput> {
   return verifyUserFlow(input);

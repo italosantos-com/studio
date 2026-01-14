@@ -1,15 +1,12 @@
 rules_version = '2';
 
+// Craft rules based on data in your Firestore database
+// allow write: if firestore.get(
+//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
-    // Permite leitura pública de todos os arquivos
     match /{allPaths=**} {
-      allow read;
-    }
-
-    // Permite a escrita (upload) pública apenas na pasta 'general-uploads'
-    match /general-uploads/{allPaths=**} {
-      allow write: if true;
+      allow read, write: if true;
     }
   }
 }

@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "facepass-afhid",
+    "italo": "facepass-afhid",
+    "italosantos-com": "facepass-afhid"
+  },
+  "targets": {},
+  "etags": {}
+}

@@ -44,7 +44,7 @@ const fetchFacebookProductsFlow = ai.defineFlow(
 
     if (!accessToken || accessToken === "YOUR_FACEBOOK_PAGE_ACCESS_TOKEN") {
       const errorMessage = "O token de acesso do Facebook (FACEBOOK_PAGE_ACCESS_TOKEN) não está configurado no ambiente do servidor.";
-      console.warn(errorMessage);
+      
       return { products: [], error: errorMessage };
     }
 
@@ -54,9 +54,16 @@ const fetchFacebookProductsFlow = ai.defineFlow(
     try {
       const response = await fetch(url);
       if (!response.ok) {
-        const errorData = await response.json();
-        const errorMessage = `Erro ao buscar produtos do Facebook: ${errorData.error.message}`;
-        console.error("Erro da API do Facebook:", errorData.error);
+        const errorText = await response.text();
+        let errorMessage;
+        try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = `Erro ao buscar produtos do Facebook: ${errorData.error.message}`;
+    
+        } catch (e) {
+            errorMessage = `Erro ao buscar produtos do Facebook. Resposta não-JSON recebida: ${errorText}`;
+    
+        }
         return { products: [], error: errorMessage };
       }
       
@@ -70,7 +77,7 @@ const fetchFacebookProductsFlow = ai.defineFlow(
       return { products };
 
     } catch (error: any) {
-        console.error('Erro no fluxo ao buscar produtos do Facebook:', error);
+
         return { products: [], error: `Não foi possível carregar os produtos do catálogo. Motivo: ${error.message}` };
     }
   }

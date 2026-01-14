@@ -2,11 +2,28 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlayCircle, Video, Loader2, AlertCircle, Twitter } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
-import { fetchTwitterFeed, type TweetWithMedia } from '@/ai/flows/twitter-flow';
+import { twitterFlow, type TwitterMediaInput, type TwitterMediaOutput } from '@/ai/flows/twitter-flow';
+
+// Tipo para compatibilidade
+type TweetWithMedia = {
+  id: string;
+  text: string;
+  media: {
+    media_key: string;
+    type: string;
+    url?: string;
+    preview_image_url?: string;
+  }[];
+  created_at?: string;
+  username: string;
+  profile_image_url?: string;
+  isRetweet?: boolean;
+};
 
 interface Media {
   url?: string;
@@ -25,7 +42,7 @@ const VideoCard = ({ video, text }: { video: Media; text: string }) => {
     const videoUrl = videoVariant?.url;
 
     return (
-        <Card className="w-full animate-in fade-in-0 zoom-in-95 duration-500 shadow-neon-red-strong border-primary/50 bg-card/90 backdrop-blur-xl group">
+        <Card className="w-full animate-in fade-in-0 zoom-in-95 duration-500 border border-gray-700 bg-black/90 backdrop-blur-xl group">
             <CardHeader className="p-0">
                 <div className="block relative aspect-video overflow-hidden rounded-t-lg bg-muted">
                     {videoUrl ? (
@@ -57,58 +74,119 @@ export default function VendaAvulsaPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [videos, setVideos] = useState<TweetWithMedia[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [currentUsername, setCurrentUsername] = useState('Severepics');
+
+    // Carregar username das configurações
+    useEffect(() => {
+        const savedUsername = localStorage.getItem('twitter_username');
+        if (savedUsername) {
+            setCurrentUsername(savedUsername);
+        }
+    }, []);
+
+    const fetchFeed = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            // Usa o username configurado ou o padrão
+            const username = localStorage.getItem('twitter_username') || 'Severepics';
+            const response = await twitterFlow({ 
+                username, 
+                maxResults: 100, 
+                mediaType: 'videos' 
+            });
+            
+            // A nova função já filtra por vídeos, não precisa filtrar novamente
+            setVideos(response.tweets);
+        } catch (e: any) {
+            const errorMessage = e.message || "Ocorreu um erro desconhecido.";
+            let displayMessage = errorMessage;
+            
+            // Mensagem mais amigável para rate limiting
+            if (errorMessage.includes('Rate limit') || errorMessage.includes('Too Many Requests')) {
+                displayMessage = "🚫 Limite de requisições da API do X atingido.\n\n⏱️ Tente novamente em 15-30 minutos.\n\n💡 Os dados ficam em cache por 1 hora para evitar esse problema.";
+            }
+            
+            setError(`Erro ao carregar: ${displayMessage}`);
+            toast({
+                variant: 'destructive',
+                title: 'Erro ao Carregar Vídeos',
+                description: displayMessage,
+                duration: 8000, // Mais tempo para ler a mensagem
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchFeed = async () => {
-            setIsLoading(true);
-            setError(null);
-            try {
-                const response = await fetchTwitterFeed({ username: 'Severepics', maxResults: 100 });
-                
-                const tweetsWithVideos = response.tweets.map(tweet => ({
-                  ...tweet,
-                  media: tweet.media.filter(m => m.type === 'video' || m.type === 'animated_gif'),
-                })).filter(tweet => tweet.media.length > 0);
+        fetchFeed();
+    }, [toast, currentUsername]); // Recarrega quando o username muda
 
-                setVideos(tweetsWithVideos);
-            } catch (e: any) {
-                const errorMessage = e.message || "Ocorreu um erro desconhecido.";
-                setError(`Não foi possível carregar os vídeos do Twitter. Motivo: ${errorMessage}`);
-                toast({
-                    variant: 'destructive',
-                    title: 'Erro ao Carregar Vídeos',
-                    description: errorMessage,
-                });
-            } finally {
-                setIsLoading(false);
+    // Listener para mudanças no localStorage
+    useEffect(() => {
+        const handleStorageChange = () => {
+            const newUsername = localStorage.getItem('twitter_username') || 'Severepics';
+            if (newUsername !== currentUsername) {
+                setCurrentUsername(newUsername);
             }
         };
 
-        fetchFeed();
-    }, [toast]);
+        window.addEventListener('storage', handleStorageChange);
+        
+        // Também escuta mudanças internas (quando muda na mesma aba)
+        const checkUsername = () => {
+            const newUsername = localStorage.getItem('twitter_username') || 'Severepics';
+            if (newUsername !== currentUsername) {
+                setCurrentUsername(newUsername);
+            }
+        };
+        
+        const interval = setInterval(checkUsername, 1000);
+        
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+            clearInterval(interval);
+        };
+    }, [currentUsername]);
 
   return (
     <main className="flex flex-1 w-full flex-col items-center p-4 bg-background">
         <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold text-primary text-shadow-neon-red-light flex items-center justify-center gap-3">
+            <h1 className="text-4xl font-bold text-white flex items-center justify-center gap-3">
               <Twitter /> Vídeos do X
             </h1>
-            <p className="text-lg text-muted-foreground mt-2">Feed de vídeos diretamente do meu perfil.</p>
+            <p className="text-lg text-gray-400 mt-2">
+                Feed de vídeos de <span className="font-medium text-white">@{currentUsername}</span>
+            </p>
         </div>
         <div className="w-full max-w-4xl space-y-12">
             {isLoading ? (
                 <div className="flex flex-col items-center justify-center min-h-[400px]">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                    <p className="mt-4 text-muted-foreground">Carregando vídeos...</p>
+                    <Loader2 className="h-12 w-12 animate-spin text-gray-200" />
+                    <p className="mt-4 text-gray-400">Carregando vídeos...</p>
                 </div>
             ) : error ? (
-                 <div className="flex flex-col items-center justify-center min-h-[400px] text-destructive bg-destructive/10 rounded-lg p-4">
-                    <AlertCircle className="h-12 w-12" />
-                    <p className="mt-4 font-semibold">Erro ao carregar vídeos</p>
-                    <p className="text-sm text-center">{error}</p>
+                 <div className="flex flex-col items-center justify-center min-h-[400px] text-gray-400 bg-gray-900 rounded-lg p-8">
+                    <AlertCircle className="h-12 w-12 mb-4" />
+                    <p className="text-lg font-semibold mb-2">Erro ao carregar vídeos</p>
+                    <p className="text-sm text-center mb-6 whitespace-pre-line max-w-md">{error}</p>
+                    <Button 
+                        onClick={fetchFeed} 
+                        disabled={isLoading}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                    >
+                        {isLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <Twitter className="h-4 w-4" />
+                        )}
+                        Tentar Novamente
+                    </Button>
                 </div>
             ) : videos.length === 0 ? (
-                <div className="flex flex-col items-center justify-center min-h-[400px] text-muted-foreground">
+                <div className="flex flex-col items-center justify-center min-h-[400px] text-gray-400">
                     <Video className="h-12 w-12" />
                     <p className="mt-4 text-lg font-semibold">Nenhum vídeo encontrado.</p>
                     <p className="text-sm">Parece que não há tweets com vídeos recentes.</p>

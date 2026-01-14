@@ -19,9 +19,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Check, X, ThumbsUp, ThumbsDown, MessageCircle } from "lucide-react";
+import { Loader2, Check, X, ThumbsUp, ThumbsDown, MessageCircle, Trash2, Database } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getAllReviews, updateReviewStatus, type Review } from './actions';
+import { getAllReviews, updateReviewStatus, deleteReview, approveAllPendingReviews, type Review } from './actions';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -30,6 +30,8 @@ export default function AdminReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [isApprovingAll, setIsApprovingAll] = useState(false);
+
 
   const fetchReviews = useCallback(async () => {
     setIsLoading(true);
@@ -80,6 +82,65 @@ export default function AdminReviewsPage() {
     }
   };
 
+  const handleDeleteReview = async (reviewId: string, author: string) => {
+    if (!confirm(`Tem certeza que deseja excluir permanentemente o comentário de "${author}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    setUpdatingId(reviewId);
+    try {
+      const result = await deleteReview(reviewId);
+      if (result.success) {
+        toast({
+          title: 'Comentário Excluído!',
+          description: result.message,
+        });
+        // Remove from UI
+        setReviews(prevReviews =>
+          prevReviews.filter(review => review.id !== reviewId)
+        );
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao excluir comentário',
+        description: error.message,
+      });
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleApproveAllPending = async () => {
+    const confirmed = confirm('Deseja aprovar TODOS os comentários pendentes? Eles aparecerão na página inicial.');
+    if (!confirmed) return;
+
+    setIsApprovingAll(true);
+    try {
+      const result = await approveAllPendingReviews();
+      if (result.success) {
+        toast({
+          title: 'Reviews Aprovados!',
+          description: result.message,
+        });
+        // Recarregar a lista de comentários
+        fetchReviews();
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao aprovar reviews',
+        description: error.message,
+      });
+    } finally {
+      setIsApprovingAll(false);
+    }
+  };
+
   const getStatusVariant = (status: Review['status']): "default" | "secondary" | "destructive" => {
     switch (status) {
       case 'approved':
@@ -111,10 +172,27 @@ export default function AdminReviewsPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Gerenciar Comentários</CardTitle>
-          <CardDescription>
-            Aprove ou rejeite os comentários deixados pelos visitantes no seu site.
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Gerenciar Comentários</CardTitle>
+              <CardDescription>
+                Aprove, rejeite ou exclua permanentemente os comentários deixados pelos visitantes no seu site.
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              onClick={handleApproveAllPending}
+              disabled={isApprovingAll || isLoading}
+              className="flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+            >
+              {isApprovingAll ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ThumbsUp className="h-4 w-4" />
+              )}
+              Aprovar Todos Pendentes
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -156,26 +234,36 @@ export default function AdminReviewsPage() {
                         {updatingId === review.id ? (
                           <Loader2 className="h-4 w-4 animate-spin ml-auto" />
                         ) : (
-                          review.status === 'pending' && (
-                            <div className="flex gap-2 justify-end">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-green-500 border-green-500 hover:bg-green-500 hover:text-white"
-                                onClick={() => handleUpdateStatus(review.id, 'approved')}
-                              >
-                                <ThumbsUp className="h-4 w-4 mr-1" /> Aprovar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-red-500 border-red-500 hover:bg-red-500 hover:text-white"
-                                onClick={() => handleUpdateStatus(review.id, 'rejected')}
-                              >
-                                <ThumbsDown className="h-4 w-4 mr-1" /> Rejeitar
-                              </Button>
-                            </div>
-                          )
+                          <div className="flex gap-2 justify-end">
+                            {review.status === 'pending' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-green-500 border-green-500 hover:bg-green-500 hover:text-white"
+                                  onClick={() => handleUpdateStatus(review.id, 'approved')}
+                                >
+                                  <ThumbsUp className="h-4 w-4 mr-1" /> Aprovar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-red-500 border-red-500 hover:bg-red-500 hover:text-white"
+                                  onClick={() => handleUpdateStatus(review.id, 'rejected')}
+                                >
+                                  <ThumbsDown className="h-4 w-4 mr-1" /> Rejeitar
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white"
+                              onClick={() => handleDeleteReview(review.id, review.author)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" /> Excluir
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>

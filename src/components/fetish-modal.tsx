@@ -22,15 +22,15 @@ export default function FetishModal({ fetish, isOpen, onClose }: FetishModalProp
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] p-0 bg-card border-primary shadow-neon-red-strong">
+      <DialogContent className="sm:max-w-[600px] p-0 bg-card border-gray-400 shadow-lg">
         <ScrollArea className="max-h-[90vh]">
           <div className="relative h-64 w-full overflow-hidden">
-            <div className="absolute inset-0 animate-gradient-bg bg-[length:200%_200%] bg-gradient-to-br from-background via-primary/30 to-background" />
+            <div className="absolute inset-0 bg-gray-900" />
             <div className="absolute inset-0 bg-gradient-to-t from-card via-card/50 to-transparent" />
           </div>
           <div className="p-6 pt-0 -mt-8 relative z-10">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-bold mb-2 text-shadow-neon-red-light">{fetish.title}</DialogTitle>
+              <DialogTitle className="text-2xl font-bold mb-2 text-white">{fetish.title}</DialogTitle>
               <DialogDescription asChild>
                 <p className="text-base text-muted-foreground whitespace-pre-wrap">
                   {fetish.description}

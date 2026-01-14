@@ -11,6 +11,7 @@ import { z } from 'zod';
 // Schema de entrada
 const ConvertCurrencyInputSchema = z.object({
   targetLocale: z.string().describe('O local do usuário (ex: "en-US", "pt-BR", "en-GB").'),
+  baseAmount: z.number().optional().describe('O valor base em BRL para conversão (padrão: 99.00).'),
 });
 export type ConvertCurrencyInput = z.infer<typeof ConvertCurrencyInputSchema>;
 
@@ -32,17 +33,19 @@ const convertCurrencyFlow = ai.defineFlow(
     inputSchema: ConvertCurrencyInputSchema,
     outputSchema: ConvertCurrencyOutputSchema,
   },
-  async ({ targetLocale }) => {
-    const baseAmount = 99.00;
+  async (input: ConvertCurrencyInput) => {
+    const { targetLocale, baseAmount = 99.00 } = input;
     const baseCurrency = 'BRL';
+
+    const fallbackResponse = {
+      amount: baseAmount,
+      currencyCode: 'BRL',
+      currencySymbol: 'R$',
+    };
 
     // Se o local for brasileiro, retorna BRL diretamente
     if (targetLocale.toLowerCase().includes('pt')) {
-      return {
-        amount: baseAmount,
-        currencyCode: 'BRL',
-        currencySymbol: 'R$',
-      };
+      return fallbackResponse;
     }
 
     const prompt = `
@@ -72,19 +75,16 @@ const convertCurrencyFlow = ai.defineFlow(
         });
 
         if (!output) {
-            throw new Error('A IA não retornou uma resposta válida.');
+    
+            return fallbackResponse;
         }
 
         return output;
 
     } catch (e: any) {
-        console.error("Erro ao converter moeda com a IA:", e.message);
+
         // Fallback para BRL em caso de erro na API
-         return {
-            amount: baseAmount,
-            currencyCode: 'BRL',
-            currencySymbol: 'R$',
-        };
+        return fallbackResponse;
     }
   }
 );

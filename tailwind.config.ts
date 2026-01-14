@@ -1,7 +1,7 @@
+import type { Config } from 'tailwindcss'
+import plugin from 'tailwindcss/plugin'
 
-import type {Config} from 'tailwindcss';
-
-export default {
+const config: Config = {
   darkMode: ['class'],
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
@@ -72,10 +72,14 @@ export default {
       boxShadow: {
         'neon-red-light': '0 0 5px hsl(var(--primary)), 0 0 10px hsl(var(--primary) / 0.5)',
         'neon-red-strong': '0 0 15px hsl(var(--primary)), 0 0 25px hsl(var(--primary) / 0.7)',
+        'neon-white': '0 0 15px rgba(255, 255, 255, 0.8), 0 0 25px rgba(255, 255, 255, 0.6)',
       },
       textShadow: {
         'neon-red-light': '0 0 5px hsl(var(--primary) / 0.8)',
         'neon-red': '0 0 8px hsl(var(--primary))',
+        'neon-white': '0 0 16px rgba(255, 255, 255, 0.9), 0 0 32px rgba(255, 255, 255, 0.7)',
+        'neon-red-strong': '0 0 15px hsl(var(--primary)), 0 0 25px hsl(var(--primary) / 0.7)',
+        DEFAULT: '0 0 5px hsl(var(--primary) / 0.8)',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -142,16 +146,18 @@ export default {
   },
   plugins: [
     require('tailwindcss-animate'),
-    function ({ addUtilities, theme }: { addUtilities: any, theme: any }) {
-      const newUtilities = {
-        '.text-shadow-neon-red-light': {
-          textShadow: theme('textShadow.neon-red-light'),
+    // Plugin customizado para text-shadow
+    plugin(function({ matchUtilities, theme }) {
+      matchUtilities(
+        {
+          'text-shadow': (value) => ({
+            textShadow: value,
+          }),
         },
-        '.text-shadow-neon-red': {
-          textShadow: theme('textShadow.neon-red'),
-        },
-      }
-      addUtilities(newUtilities, ['responsive', 'hover'])
-    }
+        { values: theme('textShadow') }
+      )
+    }),
   ],
-} satisfies Config;
+};
+
+export default config;

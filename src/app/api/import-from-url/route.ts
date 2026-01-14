@@ -1,19 +1,20 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { getStorage } from 'firebase-admin/storage';
-import { adminApp } from '@/lib/firebase-admin';
+import { getAdminApp } from '@/lib/firebase-admin';
 import axios from 'axios';
 import { extname } from 'path';
 
 export async function POST(request: NextRequest) {
   try {
+  const adminApp = getAdminApp();
     const { url } = await request.json();
 
     if (!url || !URL.canParse(url)) {
       return NextResponse.json({ error: 'URL inválida fornecida.' }, { status: 400 });
     }
 
-    const bucket = getStorage(adminApp).bucket('authkit-y9vjx.appspot.com');
+    const bucket = getStorage(adminApp!).bucket(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.appspot.com`);
     
     // Baixar o arquivo da URL
     const response = await axios({

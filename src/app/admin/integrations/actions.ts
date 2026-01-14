@@ -1,63 +1,59 @@
-
 'use server';
-/**
- * @fileOverview Server-side actions for managing third-party integrations.
- * These functions simulate connecting/disconnecting by saving state to the database.
- */
 
-import { adminApp } from '@/lib/firebase-admin';
+import { getAdminApp } from '@/lib/firebase-admin';
 import { getDatabase } from 'firebase-admin/database';
 
-export type Integration = "twitter" | "instagram" | "facebook" | "paypal" | "mercadopago";
+export type Integration = "google" | "apple" | "twitter" | "instagram" | "facebook" | "mercadopago" | "paypal";
 
-const db = getDatabase(adminApp);
-const integrationsRef = db.ref('admin/integrations');
+const adminApp = getAdminApp();
+const db = adminApp ? getDatabase(adminApp) : null;
+const integrationsRef = db ? db.ref('admin/integrations') : null;
 
-/**
- * Placeholder function to connect a service.
- * In a real implementation, this would handle the OAuth flow.
- * For now, it just sets a "connected" flag in the database.
- * @param service The service to connect to.
- * @returns A promise that resolves with a success status.
- */
-export async function connectService(service: Integration): Promise<{ success: boolean; message: string }> {
-  try {
-    await integrationsRef.child(service).set(true);
-    console.log(`Service ${service} marked as connected.`);
-    return { success: true, message: `${service} conectado com sucesso (simulado).` };
-  } catch (error: any) {
-    console.error(`Error connecting service ${service}:`, error);
-    return { success: false, message: `Falha ao conectar ${service}.` };
+// Overload for getIntegrationStatus to provide better types
+export async function getIntegrationStatus(service: 'twitter'): Promise<{ connected: boolean; screen_name?: string }>;
+export async function getIntegrationStatus(service: Exclude<Integration, 'twitter'>): Promise<boolean>;
+export async function getIntegrationStatus(service: Integration): Promise<boolean | { connected: boolean; screen_name?: string }> {
+  if (!integrationsRef) {
+    console.error("Admin SDK not available - cannot check integration status");
+    return service === 'twitter' ? { connected: false } : false;
   }
-}
 
-/**
- * Placeholder function to disconnect a service.
- * @param service The service to disconnect from.
- * @returns A promise that resolves with a success status.
- */
-export async function disconnectService(service: Integration): Promise<{ success: boolean; message: string }> {
   try {
-    await integrationsRef.child(service).set(false);
-    console.log(`Service ${service} marked as disconnected.`);
-    return { success: true, message: `${service} desconectado com sucesso.` };
-  } catch (error: any) {
-     console.error(`Error disconnecting service ${service}:`, error);
-    return { success: false, message: `Falha ao desconectar ${service}.` };
-  }
-}
+    const snapshot = await integrationsRef.child(service).once('value');
+    const data = snapshot.val();
 
-/**
- * Retrieves the connection status for a specific service.
- * @param service The service to check.
- * @returns A promise that resolves with the connection status (boolean).
- */
-export async function getIntegrationStatus(service: Integration): Promise<boolean> {
-    try {
-        const snapshot = await integrationsRef.child(service).once('value');
-        return snapshot.val() === true;
-    } catch (error: any) {
-        console.error(`Error getting status for ${service}:`, error);
-        return false;
+    if (!data) {
+        return service === 'twitter' ? { connected: false } : false;
     }
+
+    if (service === 'twitter') {
+      return { connected: !!data.connected, screen_name: data.screen_name };
+    }
+
+    // For services that store an object (like openid)
+    if (typeof data === 'object' && data !== null) {
+        return data.connected === true;
+    }
+
+    // For services that store a simple boolean
+    return data === true;
+
+  } catch (error: any) {
+    console.error(`Error getting status for ${service}:`, error);
+    return service === 'twitter' ? { connected: false } : false;
+  }
+}
+
+export async function disconnectService(service: Integration): Promise<{ success: boolean; message: string }> {
+  if (!integrationsRef) {
+    return { success: false, message: "System configuration not available." };
+  }
+
+  try {
+    const updateValue = (service === 'twitter' || service === 'mercadopago' || service === 'paypal') ? null : false;
+    await integrationsRef.child(service).set(updateValue);
+    return { success: true, message: `${service} disconnected successfully.` };
+  } catch (error: any) {
+    return { success: false, message: `Failed to disconnect ${service}.` };
+  }
 }

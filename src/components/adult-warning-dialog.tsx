@@ -20,12 +20,12 @@ interface AdultWarningDialogProps {
 export default function AdultWarningDialog({ isOpen, onConfirm }: AdultWarningDialogProps) {
   return (
     <AlertDialog open={isOpen}>
-      <AlertDialogContent className="bg-card border-primary shadow-lg shadow-neon-red-strong">
+      <AlertDialogContent className="bg-card border-gray-400 shadow-lg">
         <AlertDialogHeader>
           <div className="flex justify-center mb-4">
-            <ShieldAlert className="h-16 w-16 text-primary text-shadow-neon-red" />
+            <ShieldAlert className="h-16 w-16 text-white" />
           </div>
-          <AlertDialogTitle className="text-center text-2xl font-bold text-foreground text-shadow-neon-red-light">
+          <AlertDialogTitle className="text-center text-2xl font-bold text-foreground">
             Aviso de Conteúdo Adulto
           </AlertDialogTitle>
           <AlertDialogDescription className="text-center text-muted-foreground pt-2">
@@ -37,7 +37,7 @@ export default function AdultWarningDialog({ isOpen, onConfirm }: AdultWarningDi
         <AlertDialogFooter>
           <AlertDialogAction 
             onClick={onConfirm}
-            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 text-base shadow-neon-red-light hover:shadow-neon-red-strong"
+            className="w-full bg-white text-black hover:bg-gray-200 h-12 text-base shadow-lg"
           >
             Tenho 18+ | Continuar
           </AlertDialogAction>
