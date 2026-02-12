@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from 'react';
 import Header from './header';
-import Sidebar from './sidebar';
+import { AppSidebar } from './app-sidebar';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import FetishModal from '@/components/fetish-modal';
 import type { Fetish } from '@/lib/fetish-data';
 import AdultWarningDialog from '@/components/adult-warning-dialog';
@@ -30,7 +31,6 @@ const getOrCreateChatId = (): string => {
 };
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [selectedFetish, setSelectedFetish] = useState<Fetish | null>(null);
   const [isWarningOpen, setIsWarningOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -69,17 +69,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     setIsWarningOpen(false);
   };
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!isSidebarOpen);
-  };
-
   const toggleChat = () => {
     setIsChatOpen(!isChatOpen);
   };
 
   const handleFetishSelect = (fetish: Fetish) => {
     setSelectedFetish(fetish);
-    setSidebarOpen(false); 
   };
 
   const handleCloseModal = () => {
@@ -106,18 +101,18 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   return (
     <>
       <AdultWarningDialog isOpen={isWarningOpen} onConfirm={handleConfirmAge} />
-      <div className="flex flex-col min-h-screen bg-background text-foreground">
-        { showHeader && <Header onMenuClick={toggleSidebar} /> }
-        <Sidebar 
-            isOpen={isSidebarOpen} 
-            onClose={toggleSidebar} 
-            onFetishSelect={handleFetishSelect} 
-        />
-        {showMainHeader && <MainHeader />}
-        <main className="flex-grow">{children}</main>
-        {showMainFooter && <MainFooter />}
-        {showSiteFooter && <SiteFooter />}
-      </div>
+      <SidebarProvider>
+        <div className="flex min-h-screen bg-background text-foreground">
+          { showHeader && <AppSidebar onFetishSelect={handleFetishSelect} /> }
+          <div className="flex-1 flex flex-col">
+            { showHeader && <Header /> }
+            {showMainHeader && <MainHeader />}
+            <main className="flex-grow">{children}</main>
+            {showMainFooter && <MainFooter />}
+            {showSiteFooter && <SiteFooter />}
+          </div>
+        </div>
+      </SidebarProvider>
       {showChat && (
         <>
             <SecretChatWidget isOpen={isChatOpen} />
