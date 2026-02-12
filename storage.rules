@@ -11,5 +11,11 @@ service firebase.storage {
     match /general-uploads/{allPaths=**} {
       allow write: if true;
     }
+
+    // Permite a escrita (upload) na pasta de autenticação facial
+    // A autenticação é feita via Firebase Admin SDK no servidor
+    match /italosantos.com/facial-auth-users/{allPaths=**} {
+      allow write: if true;
+    }
   }
 }

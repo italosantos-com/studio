@@ -47,8 +47,16 @@ export async function saveUser(userData: UserData): Promise<void> {
         metadata: { contentType: 'image/jpeg' },
     });
     
-    // Make the file public to be read by the AI flow
-    await file.makePublic();
+    // Try to make the file public. If it fails, continue with the public URL anyway
+    // since storage rules allow public read access
+    try {
+        await file.makePublic();
+        console.log(`File ${fileName} made public successfully.`);
+    } catch (error: any) {
+        console.warn(`Failed to set public ACL on file ${fileName}. This is okay if storage rules allow public read.`, error.message);
+        // Continue execution - the file may still be accessible via storage rules
+    }
+    
     const publicUrl = file.publicUrl();
 
     // 2. Save user metadata to Realtime Database
