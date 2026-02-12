@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export default function SubscriptionSheet() {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
     // Add haptic feedback on button click
     const handleButtonClick = () => {
@@ -11,7 +13,7 @@ export default function SubscriptionSheet() {
       }
     };
 
-    const button = document.querySelector('.ios-primary-button');
+    const button = buttonRef.current;
     if (button) {
       button.addEventListener('click', handleButtonClick);
     }
@@ -29,7 +31,7 @@ export default function SubscriptionSheet() {
         <div className="sheet-handle" />
 
         <div className="sheet-header">
-          <img src="/logo.png" className="sheet-avatar" alt="Profile" />
+          <img src="/logo.png" className="sheet-avatar" alt="Italo Santos profile picture" />
           <h2>Italo Santos</h2>
           <p>Assinatura Premium</p>
         </div>
@@ -41,7 +43,7 @@ export default function SubscriptionSheet() {
           <p>Acesso completo aos conteúdos</p>
         </div>
 
-        <button className="ios-primary-button">
+        <button ref={buttonRef} className="ios-primary-button">
           Confirmar com Face ID
         </button>
 

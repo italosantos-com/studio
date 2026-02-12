@@ -99,7 +99,7 @@
 }
 
 /* iOS App Store Subscription Sheet Styles */
-* {
+.sheet-overlay * {
   -webkit-tap-highlight-color: transparent;
 }
 
