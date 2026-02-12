@@ -3,7 +3,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AdminHeader from '@/components/admin/header';
-import AdminSidebar from '@/components/admin/sidebar';
+import { AdminSidebarComponent } from '@/components/admin/admin-sidebar';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import AdminLoginPage from './login/page';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -12,7 +13,6 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const router = useRouter();
   const pathname = usePathname();
@@ -38,10 +38,6 @@ export default function AdminLayout({
     setIsAuthenticated(false);
     router.replace("/admin/login");
   }, [router]);
-
-  const toggleSidebar = () => {
-    setSidebarOpen(!isSidebarOpen);
-  };
   
   if (isAuthenticated === null) {
     return (
@@ -65,42 +61,17 @@ export default function AdminLayout({
     );
   }
 
-
   return (
-    <div className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
-      {/* Sidebar para Desktop */}
-      <div className="hidden border-r bg-muted/40 md:block">
-        <AdminSidebar onLogout={handleLogout} />
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full">
+        <AdminSidebarComponent onLogout={handleLogout} />
+        <SidebarInset>
+          <AdminHeader />
+          <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
+            {children}
+          </main>
+        </SidebarInset>
       </div>
-
-      {/* Layout Principal */}
-      <div className="flex flex-col">
-        {/* Cabeçalho para Mobile */}
-        <AdminHeader onMenuClick={toggleSidebar} />
-        
-        {/* Conteúdo da Página */}
-        <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
-          {children}
-        </main>
-      </div>
-
-      {/* Sidebar para Mobile (Sheet) */}
-      {isSidebarOpen && (
-        <div 
-            className="fixed inset-0 bg-black/60 z-30 md:hidden" 
-            onClick={toggleSidebar}
-        >
-            <div 
-                className="fixed top-0 left-0 h-full w-[280px] bg-muted/40 z-40 border-r"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <AdminSidebar onLogout={() => {
-                    handleLogout();
-                    toggleSidebar();
-                }} />
-            </div>
-        </div>
-      )}
-    </div>
+    </SidebarProvider>
   );
 }

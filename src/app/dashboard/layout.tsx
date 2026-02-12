@@ -3,24 +3,23 @@
 
 import { useState } from 'react';
 import Header from '@/components/layout/header';
-import Sidebar from '@/components/layout/sidebar';
+import { AppSidebar } from '@/components/layout/app-sidebar';
+import { SidebarProvider } from '@/components/ui/sidebar';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
-
-  const toggleSidebar = () => {
-    setSidebarOpen(!isSidebarOpen);
-  };
-
   return (
-    <>
-      <Header onMenuClick={toggleSidebar} />
-      <Sidebar isOpen={isSidebarOpen} onClose={toggleSidebar} onFetishSelect={() => {}} />
-      <main className="flex-grow">{children}</main>
-    </>
+    <SidebarProvider>
+      <div className="flex min-h-screen">
+        <AppSidebar onFetishSelect={() => {}} />
+        <div className="flex-1 flex flex-col">
+          <Header />
+          <main className="flex-grow">{children}</main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }
