@@ -12,10 +12,10 @@ service firebase.storage {
       allow write: if true;
     }
 
-    // Permite a escrita (upload) na pasta de autenticação facial
-    // A autenticação é feita via Firebase Admin SDK no servidor
+    // A pasta de autenticação facial é gerenciada pelo Firebase Admin SDK no servidor
+    // Não permite acesso direto do cliente para segurança
     match /italosantos.com/facial-auth-users/{allPaths=**} {
-      allow write: if true;
+      allow write: if false; // Only server-side writes via Admin SDK
     }
   }
 }

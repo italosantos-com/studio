@@ -52,8 +52,9 @@ export async function saveUser(userData: UserData): Promise<void> {
     try {
         await file.makePublic();
         console.log(`File ${fileName} made public successfully.`);
-    } catch (error: any) {
-        console.warn(`Failed to set public ACL on file ${fileName}. This is okay if storage rules allow public read.`, error.message);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.warn(`Failed to set public ACL on file ${fileName}. This is okay if storage rules allow public read.`, errorMessage);
         // Continue execution - the file may still be accessible via storage rules
     }
     
