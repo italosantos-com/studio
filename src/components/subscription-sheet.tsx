@@ -6,7 +6,7 @@ export default function SubscriptionSheet() {
   useEffect(() => {
     // Add haptic feedback on button click
     const handleButtonClick = () => {
-      if (window.navigator.vibrate) {
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
         navigator.vibrate(10);
       }
     };
