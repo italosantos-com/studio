@@ -53,14 +53,16 @@ export function AdminSidebarComponent({ onLogout }: AdminSidebarComponentProps) 
   return (
     <Sidebar side="left" collapsible="offcanvas">
       <SidebarHeader className="border-b">
-        <div className="flex items-center gap-2 px-4">
-          <Package2 className="h-6 w-6 text-primary" />
-          <span className="font-semibold">Admin Panel</span>
+        <div className="flex items-center justify-between gap-2 px-4">
+          <div className="flex items-center gap-2">
+            <Package2 className="h-6 w-6 text-primary" />
+            <span className="font-semibold">Admin Panel</span>
+          </div>
+          <Button variant="outline" size="icon" className="h-8 w-8">
+            <Bell className="h-4 w-4" />
+            <span className="sr-only">Toggle notifications</span>
+          </Button>
         </div>
-        <Button variant="outline" size="icon" className="ml-auto h-8 w-8">
-          <Bell className="h-4 w-4" />
-          <span className="sr-only">Toggle notifications</span>
-        </Button>
       </SidebarHeader>
       
       <SidebarContent>

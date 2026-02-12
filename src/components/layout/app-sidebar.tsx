@@ -123,7 +123,7 @@ export function AppSidebar({ onFetishSelect }: AppSidebarProps) {
                   <p>Sou cordial e autoritário, o acompanhante ideal para te iniciar em suas maiores fantasias sexuais.</p>
                   
                   <h3 className="font-semibold text-primary/90 mt-4">Durante as sessões</h3>
-                  <p>Gosto de proporcionar experiências únicas libertando os desejos mais obscuros e reprimidos. Realizo vários fetichessendo minhas práticas com mais experiência: D/s, fisting, pet-play, pissing, spit, leather, anal play, nipple play, ass play, spanking, humilhação, CBT, wax, sissificação, e-stim, bondage, asfixia. Disponho de acessórios e brinquedos para aquecer a relação.</p>
+                  <p>Gosto de proporcionar experiências únicas libertando os desejos mais obscuros e reprimidos. Realizo vários fetiches sendo minhas práticas com mais experiência: D/s, fisting, pet-play, pissing, spit, leather, anal play, nipple play, ass play, spanking, humilhação, CBT, wax, sissificação, e-stim, bondage, asfixia. Disponho de acessórios e brinquedos para aquecer a relação.</p>
                   <p>Para aqueles que não têm fantasias e fetiches, podemos ter uma relação sexual normal sem práticas.</p>
                   <p>Tudo à disposição em um ambiente climatizado, seguro e confortável, com chuveiro quente, toalha limpa, sabonete, álcool gel, camisinha e lubrificante. Contrate-me no WhatsApp e me encontre aqui no meu local.</p>
                 </div>
