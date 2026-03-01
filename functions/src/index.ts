@@ -1,32 +1,72 @@
 /**
- * Import function triggers from their respective submodules:
+ * Firebase Cloud Functions – Spark plan (free tier)
+ * Region: southamerica-east1
  *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ * Rules for zero cost:
+ *  - HTTP functions only (no cron, no WebSockets, no streaming)
+ *  - Auth required on protected endpoints (short-circuit on missing token)
+ *  - Restricted CORS origin list
  */
 
+import * as admin from "firebase-admin";
 import {setGlobalOptions} from "firebase-functions";
 import {onRequest} from "firebase-functions/https";
 import * as logger from "firebase-functions/logger";
+import cors from "cors";
+import type {Request, Response} from "express";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+admin.initializeApp();
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+// Cap concurrent containers to control cost on Spark plan.
+setGlobalOptions({maxInstances: 10});
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ?
+  process.env.ALLOWED_ORIGINS.split(",") :
+  ["https://your-app.vercel.app"];
+
+const corsHandler = cors({
+  origin: ALLOWED_ORIGINS,
+  methods: ["GET", "POST"],
+});
+
+/**
+ * Verifies the Firebase Auth ID token in the Authorization header.
+ * Throws if missing or invalid.
+ * @param {Request} req - The incoming HTTP request.
+ */
+async function verifyAuth(req: Request): Promise<admin.auth.DecodedIdToken> {
+  const header = req.headers.authorization;
+  if (!header) throw new Error("No authorization header");
+  const parts = header.split(" ");
+  if (parts.length !== 2 || parts[0] !== "Bearer") {
+    throw new Error("Invalid authorization header format");
+  }
+  return admin.auth().verifyIdToken(parts[1]);
+}
+
+/** Public health-check endpoint. */
+export const ping = onRequest(
+  {region: "southamerica-east1"},
+  (req: Request, res: Response) => {
+    corsHandler(req, res, () => {
+      logger.info("ping called");
+      res.json({ok: true});
+    });
+  }
+);
+
+/** Auth-protected endpoint – returns the caller's Firebase UID. */
+export const securePing = onRequest(
+  {region: "southamerica-east1"},
+  (req: Request, res: Response) => {
+    corsHandler(req, res, async () => {
+      try {
+        const user = await verifyAuth(req);
+        res.json({uid: user.uid});
+      } catch (err) {
+        logger.warn("Unauthorized request", err);
+        res.status(401).end();
+      }
+    });
+  }
+);
