@@ -51,7 +51,7 @@ Escolhas recomendadas para este cenário:
 - TypeScript
 - ESLint
 - Install dependencies
-- Região: `southamerica-east1`
+- Região: `southamerica-east1` (mantida fixa aqui para seguir exatamente este cenário)
 
 Estrutura esperada:
 
@@ -99,7 +99,7 @@ import cors from "cors";
 import { onRequest } from "firebase-functions/v2/https";
 
 const corsHandler = cors({
-  origin: ["https://seu-app.vercel.app"],
+  origin: ["https://seu-app.vercel.app"], // troque para o domínio real do seu app
   methods: ["GET", "POST"],
 });
 
@@ -126,10 +126,11 @@ npm install firebase-admin
 
 ```ts
 import admin from "firebase-admin";
+import type { Request } from "firebase-functions/v2/https";
 
 admin.initializeApp();
 
-async function verifyAuth(req: any) {
+async function verifyAuth(req: Request) {
   const header = req.headers.authorization;
   if (!header) throw new Error("No token");
 
@@ -144,6 +145,7 @@ async function verifyAuth(req: any) {
 import { onRequest } from "firebase-functions/v2/https";
 
 export const securePing = onRequest(async (req, res) => {
+  // Requer `corsHandler` (passo 5) e `verifyAuth` (passo 6) já definidos.
   corsHandler(req, res, async () => {
     try {
       const user = await verifyAuth(req);
@@ -166,7 +168,7 @@ firebase deploy --only functions
 URL esperada (exemplo):
 
 ```text
-https://southamerica-east1-PROJETO.cloudfunctions.net/ping
+https://southamerica-east1-SEU_PROJECT_ID.cloudfunctions.net/ping
 ```
 
 ---
