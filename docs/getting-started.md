@@ -99,7 +99,7 @@ import cors from "cors";
 import { onRequest } from "firebase-functions/v2/https";
 
 const corsHandler = cors({
-  origin: ["https://seu-app.vercel.app", "http://localhost:3000"], // troque para seus domínios reais
+  origin: ["https://seu-app.vercel.app", "http://localhost:3000"], // troque "seu-app" pelo nome/domínio real no Vercel
   methods: ["GET", "POST"],
 });
 
@@ -171,6 +171,8 @@ URL esperada (exemplo):
 https://southamerica-east1-SEU_PROJECT_ID.cloudfunctions.net/ping
 ```
 
+`SEU_PROJECT_ID` é o ID do projeto no Firebase Console (geralmente minúsculo e com hífens).
+
 ---
 
 ## Parte 2 — Frontend (Next.js na Vercel grátis)
@@ -187,8 +189,12 @@ export async function getStaticProps() {
 
 ### 10) Criar helper de API
 
+Defina `NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL` no frontend para separar ambientes (dev/prod).
+
 ```ts
-const API = "https://southamerica-east1-SEU_PROJECT_ID.cloudfunctions.net";
+const API =
+  process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL ??
+  "https://southamerica-east1-SEU_PROJECT_ID.cloudfunctions.net";
 
 export function api(path: string, options?: RequestInit) {
   return fetch(`${API}/${path}`, {
