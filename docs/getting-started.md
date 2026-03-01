@@ -98,8 +98,12 @@ Exemplo:
 import cors from "cors";
 import { onRequest } from "firebase-functions/v2/https";
 
+const allowedOrigins =
+  process.env.ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()) ??
+  ["https://seu-app.vercel.app", "http://localhost:3000"];
+
 const corsHandler = cors({
-  origin: ["https://seu-app.vercel.app", "http://localhost:3000"], // troque "seu-app" pelo nome/domínio real no Vercel
+  origin: allowedOrigins,
   methods: ["GET", "POST"],
 });
 
@@ -110,7 +114,7 @@ export const ping = onRequest({ region: "southamerica-east1" }, (req, res) => {
 });
 ```
 
-Em produção, prefira carregar os domínios permitidos via variável de ambiente para evitar deploy com placeholders.
+Em produção, defina `ALLOWED_ORIGINS` com domínios separados por vírgula (sem placeholders).
 
 ### 6) Configurar Firebase Auth sem custo
 
@@ -136,7 +140,9 @@ async function verifyAuth(req: Request) {
   const header = req.headers.authorization;
   if (!header) throw new Error("No token");
 
-  const token = header.split(" ")[1];
+  const [scheme, token] = header.split(" ");
+  if (scheme !== "Bearer" || !token) throw new Error("Invalid token format");
+
   return admin.auth().verifyIdToken(token);
 }
 ```
@@ -197,11 +203,16 @@ Defina `NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL` no frontend para separar ambientes (
 const API = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL;
 
 if (!API) {
-  throw new Error("Missing NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL");
+  throw new Error(
+    "Missing NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL. Add it to .env.local."
+  );
 }
 
 export function api(path: string, options?: RequestInit) {
-  return fetch(`${API}/${path}`, {
+  const baseUrl = API.replace(/\/$/, "");
+  const normalizedPath = path.replace(/^\//, "");
+
+  return fetch(`${baseUrl}/${normalizedPath}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
