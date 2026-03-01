@@ -110,6 +110,8 @@ export const ping = onRequest({ region: "southamerica-east1" }, (req, res) => {
 });
 ```
 
+Em produção, prefira carregar os domínios permitidos via variável de ambiente para evitar deploy com placeholders.
+
 ### 6) Configurar Firebase Auth sem custo
 
 No console Firebase:
@@ -192,9 +194,11 @@ export async function getStaticProps() {
 Defina `NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL` no frontend para separar ambientes (dev/prod).
 
 ```ts
-const API =
-  process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL ??
-  "https://southamerica-east1-SEU_PROJECT_ID.cloudfunctions.net";
+const API = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL;
+
+if (!API) {
+  throw new Error("Missing NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL");
+}
 
 export function api(path: string, options?: RequestInit) {
   return fetch(`${API}/${path}`, {
