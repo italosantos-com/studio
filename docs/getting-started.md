@@ -51,7 +51,7 @@ Escolhas recomendadas para este cenário:
 - TypeScript
 - ESLint
 - Install dependencies
-- Região: `southamerica-east1` (mantida fixa aqui para seguir exatamente este cenário)
+- Região: `southamerica-east1` (mantida fixa aqui para seguir exatamente este cenário e priorizar baixa latência no Brasil)
 
 Estrutura esperada:
 
@@ -99,7 +99,7 @@ import cors from "cors";
 import { onRequest } from "firebase-functions/v2/https";
 
 const corsHandler = cors({
-  origin: ["https://seu-app.vercel.app"], // troque para o domínio real do seu app
+  origin: ["https://seu-app.vercel.app", "http://localhost:3000"], // troque para seus domínios reais
   methods: ["GET", "POST"],
 });
 
@@ -188,7 +188,7 @@ export async function getStaticProps() {
 ### 10) Criar helper de API
 
 ```ts
-const API = "https://southamerica-east1-PROJETO.cloudfunctions.net";
+const API = "https://southamerica-east1-SEU_PROJECT_ID.cloudfunctions.net";
 
 export function api(path: string, options?: RequestInit) {
   return fetch(`${API}/${path}`, {
