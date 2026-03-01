@@ -1,78 +1,285 @@
+# Guia Completo: Firebase Functions (Spark) + Vercel Grátis (R$ 0,00)
 
-# Primeiros Passos para Configurar o Projeto Italo Santos
+Este guia cobre **exatamente** o cenário abaixo, do zero ao deploy, sem atalhos:
 
-Siga estes passos para configurar e executar o projeto Italo Santos em seu ambiente de desenvolvimento local.
+- **Backend:** Firebase Cloud Functions (plano Spark, sem billing)
+- **Frontend:** Vercel (plano grátis)
+- **Custo final:** **R$ 0,00**
 
-## Pré-requisitos
+---
 
-- Node.js (versão 18 ou superior recomendada)
-- npm ou yarn
-- Conta Firebase e um projeto configurado
-- Chaves de API para integrações (Mercado Pago, PayPal, Google Sheets, etc.)
+## Visão geral da arquitetura
 
-## Configuração do Ambiente
+- Frontend (Next.js) hospedado na Vercel
+- Backend HTTP hospedado no Firebase Cloud Functions
+- Comunicação entre front e backend via HTTPS (`fetch`)
+- Autenticação via Firebase Auth
+- Billing desativado
 
-1. Clone o repositório:
+---
 
-   ```bash
-   git clone [URL do Repositório]
-   cd [Nome da Pasta do Projeto]
-   ```
+## Parte 1 — Backend (Firebase Functions no plano Spark)
 
-2. Instale as dependências:
+### 1) Criar o projeto Firebase sem billing
 
-   ```bash
-   npm install
-   # ou yarn install
-   ```
+1. Acesse o console do Firebase
+2. Clique em **Criar projeto**
+3. **Não** ative Google Analytics
+4. Finalize a criação
+5. Abra a seção de plano do projeto
+6. Confirme que está em **Spark (gratuito)**
 
-3. Configure as variáveis de ambiente:
+> ⚠️ **Nunca clique em “Ativar billing”** para este cenário.
 
-   Crie um arquivo `.env` na raiz do projeto e adicione as seguintes variáveis (substitua pelos seus valores):
-
-   ```env
-   # Firebase Environment Variables
-    NEXT_PUBLIC_FIREBASE_API_KEY="SUA_CHAVE_DE_API"
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="SEU_DOMINIO.firebaseapp.com"
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID="SEU_ID_DE_PROJETO"
-
-    # PayPal Environment Variables
-    NEXT_PUBLIC_PAYPAL_CLIENT_ID="SEU_CLIENT_ID_PUBLICO_DO_PAYPAL"
-    PAYPAL_CLIENT_SECRET="SEU_SEGREDO_DO_PAYPAL"
-
-    # Mercado Pago Environment Variables
-    NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY="SUA_CHAVE_PUBLICA_DO_MERCADO_PAGO"
-    MERCADOPAGO_ACCESS_TOKEN="SEU_TOKEN_DE_ACESSO_DO_MERCADO_PAGO"
-
-    # Social Media API Tokens (Server-Side)
-    TWITTER_BEARER_TOKEN="SEU_BEARER_TOKEN_DO_TWITTER"
-    INSTAGRAM_FEED_ACCESS_TOKEN="SEU_TOKEN_DE_ACESSO_PARA_O_FEED"
-    INSTAGRAM_SHOP_ACCESS_TOKEN="SEU_TOKEN_DE_ACESSO_PARA_A_LOJA"
-    FACEBOOK_PAGE_ACCESS_TOKEN="SEU_TOKEN_DE_ACESSO_DA_PAGINA"
-
-    # Google AI (Gemini) API Key
-    GEMINI_API_KEY="SUA_API_KEY_DO_GEMINI"
-
-   ```
-
-   *Nota: As chaves privadas do Firebase Admin SDK estão no arquivo `serviceAccountKey.json` e devem ser manuseadas com segurança, não expostas publicamente.*
-
-4. Configure o Firebase CLI:
-
-   Certifique-se de ter o Firebase CLI instalado (`npm install -g firebase-tools`). Faça login e associe o projeto local ao seu projeto Firebase:
-
-   ```bash
-   firebase login
-   firebase use --add
-   ```
-
-## Executando o Projeto
-
-Para iniciar o servidor de desenvolvimento:
+### 2) Instalar ferramentas localmente
 
 ```bash
-npm run dev
-# ou yarn dev
+npm install -g firebase-tools
+firebase login
 ```
 
-O aplicativo estará disponível em `http://localhost:3000` (ou a porta que você configurar).
+### 3) Inicializar Functions no projeto
+
+Na raiz do backend (ou monorepo):
+
+```bash
+firebase init functions
+```
+
+Escolhas recomendadas para este cenário:
+
+- TypeScript
+- ESLint
+- Install dependencies
+- Região: `southamerica-east1` (mantida fixa aqui para seguir exatamente este cenário e priorizar baixa latência no Brasil)
+
+Estrutura esperada:
+
+```text
+functions/
+ ├─ src/
+ ├─ package.json
+ └─ tsconfig.json
+```
+
+### 4) Criar uma Function HTTP base
+
+Arquivo: `functions/src/index.ts`
+
+```ts
+import { onRequest } from "firebase-functions/v2/https";
+
+export const ping = onRequest(
+  { region: "southamerica-east1" },
+  (req, res) => {
+    res.json({ ok: true });
+  }
+);
+```
+
+Regras do Spark para manter custo zero:
+
+- Functions HTTP curtas
+- Sem tarefas longas
+- Sem agendamentos (cron)
+
+### 5) Configurar CORS (obrigatório)
+
+No diretório `functions`:
+
+```bash
+cd functions
+npm install cors
+```
+
+Exemplo:
+
+```ts
+import cors from "cors";
+import { onRequest } from "firebase-functions/v2/https";
+
+const allowedOrigins =
+  process.env.ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()) ??
+  ["https://seu-app.vercel.app", "http://localhost:3000"];
+
+const corsHandler = cors({
+  origin: allowedOrigins,
+  methods: ["GET", "POST"],
+});
+
+export const ping = onRequest({ region: "southamerica-east1" }, (req, res) => {
+  corsHandler(req, res, () => {
+    res.json({ ok: true });
+  });
+});
+```
+
+Em produção, defina `ALLOWED_ORIGINS` com domínios separados por vírgula (sem placeholders).
+
+### 6) Configurar Firebase Auth sem custo
+
+No console Firebase:
+
+1. Authentication
+2. Métodos de login
+3. Ative Email/Senha ou Google
+
+No backend:
+
+```bash
+npm install firebase-admin
+```
+
+```ts
+import admin from "firebase-admin";
+import type { Request } from "firebase-functions/v2/https";
+
+admin.initializeApp();
+
+async function verifyAuth(req: Request) {
+  const header = req.headers.authorization;
+  if (!header) throw new Error("No token");
+
+  const match = header.match(/^Bearer\s+(\S+)$/);
+  const token = match?.[1];
+  if (!token) throw new Error("Invalid token format");
+
+  return admin.auth().verifyIdToken(token);
+}
+```
+
+### 7) Proteger Function com Auth
+
+```ts
+import { onRequest } from "firebase-functions/v2/https";
+
+export const securePing = onRequest({ region: "southamerica-east1" }, async (req, res) => {
+  // Requer `corsHandler` (passo 5) e `verifyAuth` (passo 6) já definidos.
+  corsHandler(req, res, async () => {
+    try {
+      const user = await verifyAuth(req);
+      res.json({ uid: user.uid });
+    } catch {
+      res.status(401).end();
+    }
+  });
+});
+```
+
+Sem token válido, a função responde rapidamente com 401 e evita processamento desnecessário.
+
+### 8) Deploy do backend (Spark)
+
+```bash
+firebase deploy --only functions
+```
+
+URL esperada (exemplo):
+
+```text
+https://southamerica-east1-SEU_PROJECT_ID.cloudfunctions.net/ping
+```
+
+`SEU_PROJECT_ID` é o ID do projeto no Firebase Console (geralmente minúsculo e com hífens).
+
+---
+
+## Parte 2 — Frontend (Next.js na Vercel grátis)
+
+### 9) Preparar o projeto Next.js
+
+Para reduzir consumo, prefira páginas estáticas quando possível:
+
+```ts
+export async function getStaticProps() {
+  return { props: {} };
+}
+```
+
+### 10) Criar helper de API
+
+Defina `NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL` no frontend para separar ambientes (dev/prod).
+
+```ts
+const API = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL;
+
+if (!API) {
+  throw new Error(
+    "Missing NEXT_PUBLIC_FIREBASE_FUNCTIONS_URL. Add it to .env.local."
+  );
+}
+
+const API_BASE = API.replace(/\/$/, "");
+
+export function api(path: string, options?: RequestInit) {
+  const normalizedPath = path.replace(/^\//, "");
+
+  return fetch(`${API_BASE}/${normalizedPath}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers || {}),
+    },
+  });
+}
+```
+
+### 11) Enviar token do usuário
+
+```ts
+const token = await auth.currentUser?.getIdToken();
+
+await api("securePing", {
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+});
+```
+
+### 12) Deploy no Vercel (grátis)
+
+1. Acesse Vercel
+2. Import GitHub repository
+3. Framework: Next.js
+4. Build automático
+5. Deploy
+
+---
+
+## Parte 3 — Regras para não pagar nada
+
+### Nunca fazer
+
+- Cron jobs
+- WebSockets
+- Streaming
+- Listeners contínuos sem necessidade
+- SSR em tudo
+
+### Sempre fazer
+
+- Functions HTTP curtas
+- Auth obrigatório no backend
+- CORS restrito ao domínio do front
+- Frontend estático sempre que possível
+
+---
+
+## Checklist final
+
+- [ ] Firebase em plano Spark
+- [ ] Billing desativado
+- [ ] Apenas Functions HTTP
+- [ ] Vercel Free
+- [ ] Front chamando backend via HTTPS
+- [ ] Auth validado no backend
+
+---
+
+## Veredito técnico
+
+Esta arquitetura é uma opção estável para começar sem custo:
+
+- Sem custos ocultos no cenário descrito
+- Separação clara entre frontend e backend
+- Evolução simples para escalar futuramente, se necessário
