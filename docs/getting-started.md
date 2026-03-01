@@ -103,7 +103,7 @@ const corsHandler = cors({
   methods: ["GET", "POST"],
 });
 
-export const ping = onRequest((req, res) => {
+export const ping = onRequest({ region: "southamerica-east1" }, (req, res) => {
   corsHandler(req, res, () => {
     res.json({ ok: true });
   });
@@ -144,7 +144,7 @@ async function verifyAuth(req: Request) {
 ```ts
 import { onRequest } from "firebase-functions/v2/https";
 
-export const securePing = onRequest(async (req, res) => {
+export const securePing = onRequest({ region: "southamerica-east1" }, async (req, res) => {
   // Requer `corsHandler` (passo 5) e `verifyAuth` (passo 6) já definidos.
   corsHandler(req, res, async () => {
     try {
