@@ -140,8 +140,9 @@ async function verifyAuth(req: Request) {
   const header = req.headers.authorization;
   if (!header) throw new Error("No token");
 
-  const [scheme, token] = header.split(" ");
-  if (scheme !== "Bearer" || !token) throw new Error("Invalid token format");
+  const match = header.match(/^Bearer\s+(\S+)$/);
+  const token = match?.[1];
+  if (!token) throw new Error("Invalid token format");
 
   return admin.auth().verifyIdToken(token);
 }
@@ -208,11 +209,12 @@ if (!API) {
   );
 }
 
+const API_BASE = API.replace(/\/$/, "");
+
 export function api(path: string, options?: RequestInit) {
-  const baseUrl = API.replace(/\/$/, "");
   const normalizedPath = path.replace(/^\//, "");
 
-  return fetch(`${baseUrl}/${normalizedPath}`, {
+  return fetch(`${API_BASE}/${normalizedPath}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
